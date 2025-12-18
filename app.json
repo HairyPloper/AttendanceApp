@@ -31,10 +31,16 @@
     },
     "plugins": [
       "expo-router",
-      "expo-barcode-scanner"
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow AttendanceApp to access your camera to scan QR codes."
+        }
+      ]
     ],
     "experiments": {
-      "typedRoutes": true
+      "typedRoutes": true,
+      "baseUrl": "/AttendanceApp" 
     }
   }
 }

@@ -2,11 +2,13 @@
   "name": "attendanceapp",
   "main": "expo-router/entry",
   "version": "1.0.0",
+  "homepage": "https://HairyPloper.github.io/attendanceapp",
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "deploy": "expo export:web && gh-pages -d dist"
   },
   "dependencies": {
     "@expo/metro-runtime": "~6.1.2",

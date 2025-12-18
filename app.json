@@ -39,8 +39,7 @@
       ]
     ],
     "experiments": {
-      "typedRoutes": true,
-      "baseUrl": "/AttendanceApp" 
+      "typedRoutes": true
     }
   }
 }

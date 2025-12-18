@@ -8,7 +8,7 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "deploy": "expo export -p web && gh-pages -d dist"
+    "deploy": "rmdir /s /q dist && npx expo export -p web --clear && powershell -Command \"(Get-Content dist\\index.html) -replace 'src=\\\"/', 'src=\\\"' | Set-Content dist\\index.html\" && powershell -Command \"(Get-Content dist\\index.html) -replace 'href=\\\"/', 'href=\\\"' | Set-Content dist\\index.html\" && copy dist\\index.html dist\\404.html && npx gh-pages -d dist"
   },
   "dependencies": {
     "@expo/metro-runtime": "~6.1.2",

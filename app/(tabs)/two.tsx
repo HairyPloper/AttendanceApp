@@ -133,7 +133,7 @@ export default function HistoryScreen() {
                 </View>
                 <View style={styles.timeBlock}>
                   <Text style={[styles.timeLabel, {textAlign: 'right'}]}>CHECK-OUT</Text>
-                  <Text style={[styles.dateText, {textAlign: 'right'}]}>{item.checkout ? formatDateTime(item.checkout) : "Pending..."}</Text>
+                  <Text style={[styles.dateText, {textAlign: 'right'}]}>{item.checkout ? formatDateTime(item.checkout) : "Osveženje u toku..."}</Text>
                 </View>
               </View>
             </View>

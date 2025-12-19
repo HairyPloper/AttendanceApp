@@ -2,13 +2,13 @@
   "name": "attendanceapp",
   "main": "expo-router/entry",
   "version": "1.0.0",
-  "homepage": "https://HairyPloper.github.io/attendanceapp",
+  "homepage": "https://HairyPloper.github.io/AttendanceApp",
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "deploy": "rmdir /s /q dist && npx expo export -p web --clear && powershell -Command \"(Get-Content dist\\index.html) -replace 'src=\\\"/', 'src=\\\"' | Set-Content dist\\index.html\" && powershell -Command \"(Get-Content dist\\index.html) -replace 'href=\\\"/', 'href=\\\"' | Set-Content dist\\index.html\" && copy dist\\index.html dist\\404.html && npx gh-pages -d dist"
+    "deploy": "npx expo export -p web --clear && echo. > dist/.nojekyll && copy dist\\index.html dist\\404.html && npx gh-pages -d dist --dotfiles"
   },
   "dependencies": {
     "@expo/metro-runtime": "~6.1.2",

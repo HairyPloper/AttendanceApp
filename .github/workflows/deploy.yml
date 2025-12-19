@@ -32,6 +32,11 @@ jobs:
         run: |
           Copy-Item -Path dist/index.html -Destination dist/404.html -Force
 
+      - name: Configure Git user for gh-pages
+        run: |
+          git config --global user.email "${{ github.actor }}@users.noreply.github.com"
+          git config --global user.name "${{ github.actor }}"
+
       - name: Deploy to gh-pages
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

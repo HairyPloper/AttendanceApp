@@ -83,7 +83,7 @@ export default function HistoryScreen() {
 
   // UPDATED: Now calculates hh mm ss
   const calculateTotalTime = (start: string, end: string | null) => {
-    if (!end) return "Active Session";
+    if (!end) return "Aktivna Sesija";
     const diffMs = new Date(end).getTime() - new Date(start).getTime();
     if (diffMs < 0) return "0s";
     const totalSeconds = Math.floor(diffMs / 1000);
@@ -101,20 +101,20 @@ export default function HistoryScreen() {
     <ScrollView contentContainerStyle={styles.scrollContainer}>
       <View style={styles.profileHeader}>
         <View>
-          <Text style={styles.welcomeText}>Attendee</Text>
+          <Text style={styles.welcomeText}>Šmiber</Text>
           <Text style={styles.userNameText}>{name}</Text>
         </View>
         <TouchableOpacity style={styles.refreshBtn} onPress={() => { fetchUserHistory(name); fetchLeaderboard(selectedEvent); }}>
-          <Text style={{color: '#fff', fontWeight: 'bold'}}>Refresh</Text>
+          <Text style={{color: '#fff', fontWeight: 'bold'}}>Osveži</Text>
         </TouchableOpacity>
       </View>
 
       <View style={styles.dataBox}>
         <View style={styles.headerRow}>
-          <Text style={styles.subTitle}>My Attendance</Text>
+          <Text style={styles.subTitle}>Posete</Text>
           <View style={styles.pickerContainer}>
             <Picker selectedValue={rowsPerPage} onValueChange={(v) => {setRowsPerPage(Number(v)); setCurrentPage(1);}} style={styles.picker}>
-              <Picker.Item label="10 Rows" value={10} /><Picker.Item label="25 Rows" value={25} />
+              <Picker.Item label="10" value={10} /><Picker.Item label="25" value={25} />
             </Picker>
           </View>
         </View>
@@ -137,7 +137,7 @@ export default function HistoryScreen() {
                 </View>
               </View>
             </View>
-          )) : <Text style={styles.emptyText}>No scans found.</Text>
+          )) : <Text style={styles.emptyText}>Nema podataka.</Text>
         )}
 
         {userHistory.length > rowsPerPage && (
@@ -155,7 +155,7 @@ export default function HistoryScreen() {
 
       <View style={[styles.dataBox, { marginTop: 20, marginBottom: 40 }]}>
         <View style={styles.headerRow}>
-          <Text style={styles.subTitle}>Leaderboard</Text>
+          <Text style={styles.subTitle}>Rang lista</Text>
           <View style={styles.pickerContainer}>
             <Picker selectedValue={selectedEvent} onValueChange={(val) => { setSelectedEvent(val); fetchLeaderboard(val); }} style={styles.picker}>
               {eventList.map((evt, idx) => <Picker.Item key={idx} label={evt} value={evt} />)}
@@ -169,9 +169,9 @@ export default function HistoryScreen() {
                 <Text style={[styles.itemText, { color: i === 0 ? '#D4AF37' : '#444', fontWeight: i < 3 ? 'bold' : 'normal' }]}>
                   {i === 0 ? "🥇 " : i === 1 ? "🥈 " : i === 2 ? "🥉 " : `${i + 1}. `}{item.name}
                 </Text>
-                <Text style={styles.timeSubtext}>Total Time: {item.timeStr}</Text>
+                <Text style={styles.timeSubtext}>Ukupno vreme: {item.timeStr}</Text>
               </View>
-              <Text style={styles.countText}>{item.total} Days</Text>
+              <Text style={styles.countText}>{item.total} posete</Text>
             </View>
           ))
         )}

@@ -4,7 +4,8 @@ import { BarcodeScanningResult, CameraView, useCameraPermissions } from 'expo-ca
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
-const API_URL = "https://script.google.com/macros/s/AKfycbxe1_meZCJi0kRuL83D_kXxvCBoE1B8VauluPlJQL0fAtoBBo0q5AIFNssSDr5tsOcR/exec";
+// --- API URL from Environment Variables --- !Important: Ensure to set up environment variable handling in your project
+const API_URL = process.env.REACT_APP_API_KEY;
 
 // --- Local Font Mapping for Icons ---
 const Glyphs = {
@@ -64,6 +65,12 @@ export default function ScanScreen() {
     const eventName = result.data;
 
     try {
+      if (!API_URL) {
+        showToast("API URL not configured", 'error');
+        setIsProcessing(false);
+        setScanned(false);
+        return;
+      }
       // We send a POST request. The Google Script (doPost) handles 
       // the 12h logic to decide between Check-in or Check-out update.
       const response = await fetch(API_URL, {

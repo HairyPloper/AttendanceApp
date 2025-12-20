@@ -60,7 +60,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Scan',
+          title: 'Skeniraj',
           headerTitle: () => <TabBarIcon name="camera" color="#666" />,
           tabBarIcon: ({ color }) => <TabBarIcon name="camera" color={color} />,
         }}
@@ -68,7 +68,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="two"
         options={{
-          title: 'History',
+          title: 'Pregled',
           headerTitle: () => <TabBarIcon name="clock-o" color="#666" />,
           tabBarIcon: ({ color }) => <TabBarIcon name="clock-o" color={color} />,
         }}

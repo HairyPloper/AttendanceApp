@@ -4,7 +4,8 @@ import { BarcodeScanningResult, CameraView, useCameraPermissions } from 'expo-ca
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
-const API_URL = "https://script.google.com/macros/s/AKfycbxe1_meZCJi0kRuL83D_kXxvCBoE1B8VauluPlJQL0fAtoBBo0q5AIFNssSDr5tsOcR/exec";
+// --- API URL from Environment Variables --- !Important: Ensure to set up environment variable handling in your project
+const API_URL = process.env.REACT_APP_API_KEY;
 
 // --- Local Font Mapping for Icons ---
 const Glyphs = {
@@ -51,7 +52,7 @@ export default function ScanScreen() {
   }
 
   const handleRegister = async () => {
-    if (name.trim().length < 2) return showToast("Please enter your name", 'error');
+    if (name.trim().length < 2) return showToast("Enter your name", 'error');
     await AsyncStorage.setItem('user_name', name.trim());
     setIsRegistered(true);
   };
@@ -64,6 +65,12 @@ export default function ScanScreen() {
     const eventName = result.data;
 
     try {
+      if (!API_URL) {
+        showToast("API URL not configured", 'error');
+        setIsProcessing(false);
+        setScanned(false);
+        return;
+      }
       // We send a POST request. The Google Script (doPost) handles 
       // the 12h logic to decide between Check-in or Check-out update.
       const response = await fetch(API_URL, {
@@ -78,10 +85,11 @@ export default function ScanScreen() {
       });
 
       const resultText = await response.text();
-
+      //Check-out recorded
+      //Check-in successful
       // Handling response messages from your Google Script
       if (resultText.includes("Checkout")) {
-        showToast(`Check-out recorded: ${eventName}`, 'success');
+        showToast(`Ajde idite si: ${eventName}`, 'success');
       } else if (resultText.includes("Success")) {
         showToast(`Check-in successful: ${eventName}`, 'success');
       } else {
@@ -105,10 +113,10 @@ export default function ScanScreen() {
         <LocalIcon name="camera" color="#ccc" size={80} />
         <Text style={styles.permissionTitle}>Camera Access</Text>
         <Text style={styles.permissionSubtitle}>
-          We need your camera to scan QR codes for attendance.
+          za skeniranje QR kodova.
         </Text>
         <TouchableOpacity style={styles.primaryButton} onPress={requestPermission}>
-          <Text style={styles.buttonText}>Enable Camera</Text>
+          <Text style={styles.buttonText}>Uključi kameru</Text>
         </TouchableOpacity>
       </View>
     );
@@ -118,8 +126,8 @@ export default function ScanScreen() {
   if (!isRegistered) {
     return (
       <View style={styles.container}>
-        <Text style={styles.title}>Welcome!</Text>
-        <Text style={styles.registrationSubtitle}>Enter your name to begin.</Text>
+        <Text style={styles.title}>Zdravo!</Text>
+        <Text style={styles.registrationSubtitle}>Unesi ime.</Text>
         <TextInput 
           style={styles.input} 
           value={name} 
@@ -129,7 +137,7 @@ export default function ScanScreen() {
           autoCapitalize="words"
         />
         <TouchableOpacity style={styles.primaryButton} onPress={handleRegister}>
-          <Text style={styles.buttonText}>Start Scanning</Text>
+          <Text style={styles.buttonText}>Skeniraj</Text>
         </TouchableOpacity>
       </View>
     );
@@ -139,7 +147,7 @@ export default function ScanScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.attendeeLabel}>
-        Attendee: <Text style={{ fontWeight: 'bold', color: '#2196F3' }}>{name}</Text>
+        Šmiber: <Text style={{ fontWeight: 'bold', color: '#2196F3' }}>{name}</Text>
       </Text>
       
       <View style={styles.cameraContainer}>
@@ -156,13 +164,13 @@ export default function ScanScreen() {
         {isProcessing && (
           <View style={styles.overlay}>
             <ActivityIndicator size="large" color="#fff" />
-            <Text style={{ color: '#fff', marginTop: 10 }}>Syncing with Sheet...</Text>
+            <Text style={{ color: '#fff', marginTop: 10 }}>Processing...</Text>
           </View>
         )}
       </View>
 
       <Text style={styles.hint}>
-        {scanned ? "Processing..." : "Scan QR Code"}
+        {scanned ? "Processing..." : "Skeniraj QR kod"}
       </Text>
 
       {/* --- Toast Notification Overlay --- */}

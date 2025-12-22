@@ -13,22 +13,29 @@ export default function HistoryScreen() {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(5);
+  const [userName, setUserName] = useState<string>('');
 
   useEffect(() => { if (isFocused) loadInitialData(); }, [isFocused]);
 
   const loadInitialData = async () => {
     const savedName = await AsyncStorage.getItem('user_name');
     if (savedName) {
+      setUserName(savedName);
       fetchUserHistory(savedName);
     }
   };
 
-  const fetchUserHistory = async (userName: string) => {
+  const fetchUserHistory = async (name: string) => {
     setHistoryLoading(true);
     try {
-      const res = await fetch(`${API_URL}?action=getUserData&name=${encodeURIComponent(userName.trim())}&t=${Date.now()}`);
-      setUserHistory(await res.json());
-    } catch (e) { console.error(e); } finally { setHistoryLoading(false); }
+      const res = await fetch(`${API_URL}?action=getUserData&name=${encodeURIComponent(name.trim())}&t=${Date.now()}`);
+      const data = await res.json();
+      setUserHistory(data);
+    } catch (e) { 
+      console.error("History Fetch Error:", e); 
+    } finally { 
+      setHistoryLoading(false); 
+    }
   };
 
   const formatDateTime = (dateString: string | null) => {
@@ -56,32 +63,27 @@ export default function HistoryScreen() {
 
   return (
     <ScrollView contentContainerStyle={sharedStyles.scrollContainer}>
+      {/* <View style={sharedStyles.profileHeader}>
+        <View>
+          <Text style={sharedStyles.welcomeText}>Šmiber Profil</Text>
+          <Text style={sharedStyles.userNameText}>{userName || 'Učitavanje...'}</Text>
+        </View>
+        <TouchableOpacity style={sharedStyles.refreshBtn} onPress={() => fetchUserHistory(userName)}>
+          <Text style={{color: '#fff', fontWeight: 'bold'}}>Osveži</Text>
+        </TouchableOpacity>
+      </View> */}
+
       <View style={sharedStyles.dataBox}>
         <View style={sharedStyles.headerRow}>
-          <Text style={sharedStyles.subTitle}>Posete</Text>
-            <View style={sharedStyles.chipContainer}>
-              <Text style={sharedStyles.chipLabel}>Prikaži:</Text>
-              {[5, 10].map((value) => (
-                <TouchableOpacity
-                  key={value}
-                  onPress={() => {
-                    setRowsPerPage(value);
-                    setCurrentPage(1);
-                  }}
-                  style={[
-                    sharedStyles.chip,
-                    rowsPerPage === value && sharedStyles.activeChip
-                  ]}
-                >
-                  <Text style={[
-                    sharedStyles.chipText,
-                    rowsPerPage === value && sharedStyles.activeChipText
-                  ]}>
-                    {value}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+          <Text style={sharedStyles.subTitle}>Istorija Poseta</Text>
+          <View style={sharedStyles.chipContainer}>
+            {[5, 10].map((v) => (
+              <TouchableOpacity key={v} onPress={() => { setRowsPerPage(v); setCurrentPage(1); }}
+                style={[sharedStyles.chip, rowsPerPage === v && sharedStyles.activeChip]}>
+                <Text style={[sharedStyles.chipText, rowsPerPage === v && sharedStyles.activeChipText]}>{v}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         </View>
 
         {historyLoading ? <ActivityIndicator size="large" color="#2196F3" /> : (
@@ -89,30 +91,27 @@ export default function HistoryScreen() {
             <View key={i} style={sharedStyles.historyItemContainer}>
               <View style={sharedStyles.historyTopRow}>
                 <Text style={sharedStyles.itemEventText}>📍 {item.event}</Text>
-                <Text style={sharedStyles.durationText}>{calculateTotalTime(item.checkin, item.checkout)}</Text>
+                <Text style={[sharedStyles.durationText, !item.checkout && {color: '#4CAF50'}]}>
+                  {calculateTotalTime(item.checkin, item.checkout)}
+                </Text>
               </View>
               <View style={sharedStyles.timeDetailsRow}>
-                <View style={sharedStyles.timeBlock}>
-                  <Text style={sharedStyles.timeLabel}>CHECK-IN</Text>
-                  <Text style={sharedStyles.dateText}>{formatDateTime(item.checkin)}</Text>
-                </View>
-                <View style={sharedStyles.timeBlock}>
-                  <Text style={[sharedStyles.timeLabel, {textAlign: 'right'}]}>CHECK-OUT</Text>
-                  <Text style={[sharedStyles.dateText, {textAlign: 'right'}]}>{item.checkout ? formatDateTime(item.checkout) : "U toku..."}</Text>
-                </View>
+                <View style={sharedStyles.timeBlock}><Text style={sharedStyles.timeLabel}>ULAZ</Text><Text style={sharedStyles.dateText}>{formatDateTime(item.checkin)}</Text></View>
+                <View style={sharedStyles.timeBlock}><Text style={[sharedStyles.timeLabel, {textAlign: 'right'}]}>IZLAZ</Text>
+                <Text style={[sharedStyles.dateText, {textAlign: 'right'}]}>{item.checkout ? formatDateTime(item.checkout) : "Osveženje u toku..."}</Text></View>
               </View>
             </View>
-          )) : <Text style={sharedStyles.emptyText}>Nema podataka.</Text>
+          )) : <Text style={sharedStyles.emptyText}>Još uvek nemaš zabeleženih poseta.</Text>
         )}
 
         {userHistory.length > rowsPerPage && (
           <View style={sharedStyles.paginationRow}>
             <TouchableOpacity disabled={currentPage === 1} onPress={() => setCurrentPage(p => p - 1)}>
-              <Text style={{color: currentPage === 1 ? '#ccc' : '#2196F3', fontWeight: 'bold'}}>Prev</Text>
+              <Text style={{color: currentPage === 1 ? '#ccc' : '#2196F3', fontWeight: 'bold'}}>Nazad</Text>
             </TouchableOpacity>
-            <Text style={sharedStyles.pageInfo}>Strana {currentPage} od {totalPages}</Text>
+            <Text style={sharedStyles.pageInfo}>{currentPage} / {totalPages}</Text>
             <TouchableOpacity disabled={currentPage === totalPages} onPress={() => setCurrentPage(p => p + 1)}>
-              <Text style={{color: currentPage === totalPages ? '#ccc' : '#2196F3', fontWeight: 'bold'}}>Next</Text>
+              <Text style={{color: currentPage === totalPages ? '#ccc' : '#2196F3', fontWeight: 'bold'}}>Napred</Text>
             </TouchableOpacity>
           </View>
         )}

@@ -5,7 +5,7 @@ import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from 'rea
 import { HistoryItem } from '../../components/api';
 import { sharedStyles } from '../../components/styles';
 
-const API_URL = "https://script.google.com/macros/s/AKfycbxe1_meZCJi0kRuL83D_kXxvCBoE1B8VauluPlJQL0fAtoBBo0q5AIFNssSDr5tsOcR/exec";
+const API_URL = "";
 
 export default function HistoryScreen() {
   const isFocused = useIsFocused();

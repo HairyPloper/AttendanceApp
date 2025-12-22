@@ -5,7 +5,7 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 // --- API URL from Environment Variables --- !Important: Ensure to set up environment variable handling in your project
-const API_URL = process.env.REACT_APP_API_KEY;
+const API_URL = "https://script.google.com/macros/s/AKfycbxe1_meZCJi0kRuL83D_kXxvCBoE1B8VauluPlJQL0fAtoBBo0q5AIFNssSDr5tsOcR/exec";
 
 // --- Local Font Mapping for Icons ---
 const Glyphs = {

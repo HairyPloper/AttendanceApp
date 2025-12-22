@@ -1,62 +1,76 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFonts } from 'expo-font';
 import { Tabs } from 'expo-router';
-import React from 'react';
-import { StyleSheet, Text } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 
 /**
  * 1. MANUAL GLYPH MAPPING
- * Since we aren't using the expo library, we map names to Unicode hex codes.
- * \uf030 is the code for 'camera'
- * \uf017 is the code for 'clock-o'
+ * Using Unicode hex codes for FontAwesome icons.
  */
 const Glyphs = {
   camera: '\uf030',
   'clock-o': '\uf017',
+  trophy: '\uf091',
 };
 
-// Define the type for our icon names based on the object above
 type IconName = keyof typeof Glyphs;
 
 /**
  * 2. CUSTOM TAB BAR ICON COMPONENT
- * This uses a standard React Native Text component styled with your local font.
  */
 function TabBarIcon({ name, color, size = 28 }: { name: IconName; color: string; size?: number }) {
   return (
-    <Text 
-      style={[
-        styles.iconText, 
-        { color: color, fontSize: size }
-      ]}
-    >
+    <Text style={[styles.iconText, { color: color, fontSize: size }]}>
       {Glyphs[name]}
     </Text>
   );
 }
 
 export default function TabLayout() {
-  /**
-   * 3. LOAD LOCAL FONT
-   * Ensure the path '../../assets/FontAwesome.ttf' matches exactly 
-   * where you pasted the file.
-   */
+  const [userName, setUserName] = useState<string>('');
+  
   const [fontsLoaded] = useFonts({
     'LocalFontAwesome': require('../../assets/FontAwesome.ttf'),
   });
 
-  // 4. Wait for font to load to avoid seeing "X" or "boxes" instead of icons
+  // Fetch name once when layout mounts to display in the header
+  useEffect(() => {
+    const getName = async () => {
+      try {
+        const savedName = await AsyncStorage.getItem('user_name');
+        if (savedName) setUserName(savedName);
+      } catch (e) {
+        console.error("Failed to load user_name", e);
+      }
+    };
+    getName();
+  }, []);
+
   if (!fontsLoaded) return null;
+
+  /**
+   * 3. HEADER USER INFO COMPONENT
+   * Displays the "ŠMIBER" brand and the current user's name.
+   */
+  const HeaderUserInfo = () => (
+    <View style={styles.headerRightContainer}>
+      <Text style={styles.brandText}>ŠMIBER</Text>
+      <Text style={styles.userSubText}>{userName || 'Gost'}</Text>
+    </View>
+  );
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: '#2196F3', // Professional Blue
+        tabBarActiveTintColor: '#2196F3',
         headerShown: true,
         tabBarShowLabel: true,
-        tabBarStyle:{
-          height:55
-        }
+        tabBarStyle: { height: 55 },
+        // Set the global headerRight to show user info on every tab
+        headerRight: () => <HeaderUserInfo />,
       }}>
+      
       <Tabs.Screen
         name="index"
         options={{
@@ -65,22 +79,60 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <TabBarIcon name="camera" color={color} />,
         }}
       />
+
       <Tabs.Screen
-        name="two"
+        name="UserHistory"
         options={{
           title: 'Pregled',
           headerTitle: () => <TabBarIcon name="clock-o" color="#666" />,
           tabBarIcon: ({ color }) => <TabBarIcon name="clock-o" color={color} />,
         }}
       />
+
+      <Tabs.Screen
+        name="Leaderboard"
+        options={{
+          title: 'Rang lista',
+          headerTitle: () => <TabBarIcon name="trophy" color="#666" />,
+          tabBarIcon: ({ color }) => <TabBarIcon name="trophy" color={color} />,
+        }}
+      />
+
+      <Tabs.Screen
+        name="titles"
+        options={{
+          href: null, // Hides this tab from the bottom bar
+        }}
+      />
     </Tabs>
   );
 }
 
+/**
+ * 4. STYLES
+ */
 const styles = StyleSheet.create({
   iconText: {
-    fontFamily: 'LocalFontAwesome', // Must match the key used in useFonts
+    fontFamily: 'LocalFontAwesome',
     marginBottom: -3,
     textAlign: 'center',
+  },
+  headerRightContainer: {
+    marginRight: 15,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
+  brandText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#2196F3', // Professional Blue
+    letterSpacing: 2, // Modern spacing
+    marginBottom: -1,
+    textTransform: 'uppercase',
+  },
+  userSubText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#333',
   },
 });

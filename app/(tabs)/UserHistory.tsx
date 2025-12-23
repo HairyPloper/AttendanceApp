@@ -2,37 +2,66 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useIsFocused } from '@react-navigation/native';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from 'react-native';
-import { HistoryItem } from '../../components/api';
 import { sharedStyles } from '../../components/styles';
 
-const API_URL = "";
+const API_URL = "https://script.google.com/macros/s/AKfycbxe1_meZCJi0kRuL83D_kXxvCBoE1B8VauluPlJQL0fAtoBBo0q5AIFNssSDr5tsOcR/exec";
 
 export default function HistoryScreen() {
   const isFocused = useIsFocused();
-  const [userHistory, setUserHistory] = useState<HistoryItem[]>([]);
+  const [userHistory, setUserHistory] = useState<any[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(5);
   const [userName, setUserName] = useState<string>('');
+  const [isClient, setIsClient] = useState(false);
 
-  useEffect(() => { if (isFocused) loadInitialData(); }, [isFocused]);
+  useEffect(() => {
+    setIsClient(true); 
+    if (isFocused) {
+      // Instant loading state
+      setHistoryLoading(true); 
+      // 1s delay to prevent NetworkError on hard refresh
+      const timer = setTimeout(() => {
+        loadInitialData();
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [isFocused]);
 
   const loadInitialData = async () => {
-    const savedName = await AsyncStorage.getItem('user_name');
-    if (savedName) {
-      setUserName(savedName);
-      fetchUserHistory(savedName);
+    try {
+      const savedName = await AsyncStorage.getItem('user_name');
+      if (savedName) {
+        setUserName(savedName);
+        // Load from phone memory first (Instant)
+        const cached = await AsyncStorage.getItem(`cache_history_${savedName}`);
+        if (cached) {
+          setUserHistory(JSON.parse(cached));
+        }
+        fetchUserHistory(savedName);
+      } else {
+        setHistoryLoading(false);
+      }
+    } catch (e) {
+      setHistoryLoading(false);
     }
   };
 
   const fetchUserHistory = async (name: string) => {
-    setHistoryLoading(true);
     try {
-      const res = await fetch(`${API_URL}?action=getUserData&name=${encodeURIComponent(name.trim())}&t=${Date.now()}`);
+      const res = await fetch(`${API_URL}?action=getUserData&name=${encodeURIComponent(name.trim())}&t=${Date.now()}`, {
+        method: 'GET',
+        mode: 'cors',
+        redirect: 'follow'
+      });
+      if (!res.ok) throw new Error();
       const data = await res.json();
-      setUserHistory(data);
+      const validData = Array.isArray(data) ? data : [];
+      setUserHistory(validData);
+      // Save for next visit
+      await AsyncStorage.setItem(`cache_history_${name}`, JSON.stringify(validData));
     } catch (e) { 
-      console.error("History Fetch Error:", e); 
+      console.warn("Network busy, showing cached data."); 
     } finally { 
       setHistoryLoading(false); 
     }
@@ -59,20 +88,12 @@ export default function HistoryScreen() {
 
   const indexOfLastRow = currentPage * rowsPerPage;
   const currentRows = userHistory.slice(indexOfLastRow - rowsPerPage, indexOfLastRow);
-  const totalPages = Math.ceil(userHistory.length / rowsPerPage);
+  const totalPages = Math.ceil(userHistory.length / rowsPerPage) || 1;
+
+  if (!isClient) return <View style={{ flex: 1, backgroundColor: '#fff' }} />;
 
   return (
     <ScrollView contentContainerStyle={sharedStyles.scrollContainer}>
-      {/* <View style={sharedStyles.profileHeader}>
-        <View>
-          <Text style={sharedStyles.welcomeText}>Šmiber Profil</Text>
-          <Text style={sharedStyles.userNameText}>{userName || 'Učitavanje...'}</Text>
-        </View>
-        <TouchableOpacity style={sharedStyles.refreshBtn} onPress={() => fetchUserHistory(userName)}>
-          <Text style={{color: '#fff', fontWeight: 'bold'}}>Osveži</Text>
-        </TouchableOpacity>
-      </View> */}
-
       <View style={sharedStyles.dataBox}>
         <View style={sharedStyles.headerRow}>
           <Text style={sharedStyles.subTitle}>Istorija Poseta</Text>
@@ -86,22 +107,43 @@ export default function HistoryScreen() {
           </View>
         </View>
 
-        {historyLoading ? <ActivityIndicator size="large" color="#2196F3" /> : (
-          currentRows.length > 0 ? currentRows.map((item, i) => (
-            <View key={i} style={sharedStyles.historyItemContainer}>
-              <View style={sharedStyles.historyTopRow}>
-                <Text style={sharedStyles.itemEventText}>📍 {item.event}</Text>
-                <Text style={[sharedStyles.durationText, !item.checkout && {color: '#4CAF50'}]}>
-                  {calculateTotalTime(item.checkin, item.checkout)}
-                </Text>
+        {/* TOP SPINNER: Shows when loading but we already have cached data to display */}
+        {historyLoading && userHistory.length > 0 && (
+          <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 15 }}>
+            <ActivityIndicator size="small" color="#2196F3" />
+          </View>
+        )}
+
+        {/* FULL SPINNER: Shows only if the list is completely empty and loading */}
+        {historyLoading && userHistory.length === 0 ? (
+          <ActivityIndicator size="large" color="#2196F3" style={{ marginVertical: 30 }} />
+        ) : (
+          <>
+            {currentRows.length > 0 ? currentRows.map((item, i) => (
+              <View key={i} style={sharedStyles.historyItemContainer}>
+                <View style={sharedStyles.historyTopRow}>
+                  <Text style={sharedStyles.itemEventText}>📍 {item.event}</Text>
+                  <Text style={[sharedStyles.durationText, !item.checkout && {color: '#4CAF50'}]}>
+                    {calculateTotalTime(item.checkin, item.checkout)}
+                  </Text>
+                </View>
+                <View style={sharedStyles.timeDetailsRow}>
+                  <View style={sharedStyles.timeBlock}>
+                    <Text style={sharedStyles.timeLabel}>ULAZ</Text>
+                    <Text style={sharedStyles.dateText}>{formatDateTime(item.checkin)}</Text>
+                  </View>
+                  <View style={sharedStyles.timeBlock}>
+                    <Text style={[sharedStyles.timeLabel, {textAlign: 'right'}]}>IZLAZ</Text>
+                    <Text style={[sharedStyles.dateText, {textAlign: 'right'}]}>
+                      {item.checkout ? formatDateTime(item.checkout) : "U toku..."}
+                    </Text>
+                  </View>
+                </View>
               </View>
-              <View style={sharedStyles.timeDetailsRow}>
-                <View style={sharedStyles.timeBlock}><Text style={sharedStyles.timeLabel}>ULAZ</Text><Text style={sharedStyles.dateText}>{formatDateTime(item.checkin)}</Text></View>
-                <View style={sharedStyles.timeBlock}><Text style={[sharedStyles.timeLabel, {textAlign: 'right'}]}>IZLAZ</Text>
-                <Text style={[sharedStyles.dateText, {textAlign: 'right'}]}>{item.checkout ? formatDateTime(item.checkout) : "Osveženje u toku..."}</Text></View>
-              </View>
-            </View>
-          )) : <Text style={sharedStyles.emptyText}>Još uvek nemaš zabeleženih poseta.</Text>
+            )) : !historyLoading && (
+              <Text style={sharedStyles.emptyText}>Još uvek nemaš zabeleženih poseta.</Text>
+            )}
+          </>
         )}
 
         {userHistory.length > rowsPerPage && (

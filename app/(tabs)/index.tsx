@@ -124,6 +124,7 @@ export default function ScanScreen() {
             style={styles.camera} 
             facing={Platform.OS === 'web' ? undefined : 'back'} 
             onBarcodeScanned={scanned ? undefined : handleBarCodeScanned} 
+            barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
           />
         ) : (
           <View style={[styles.camera, { backgroundColor: '#000' }]} />

@@ -1,4 +1,4 @@
-import { StyleSheet } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
 
 // We use 'export' here so other files can see 'sharedStyles'
 export const sharedStyles = StyleSheet.create({
@@ -103,12 +103,7 @@ export const sharedStyles = StyleSheet.create({
   },
   activeChip: {
     backgroundColor: '#fff', // White "card" look for the active item
-    // Add a slight shadow for depth
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    ...Platform.select({web:{boxShadow:'0px 4px 10px rgba(0,0,0,0.1)'},default:{elevation:2}})
   },
   chipText: {
     fontSize: 14,

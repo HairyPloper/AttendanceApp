@@ -2,9 +2,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFonts } from 'expo-font';
 import { Tabs } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { Animated, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Animated, Modal, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
-const API_URL = "";
+const API_URL = "https://script.google.com/macros/s/AKfycbxe1_meZCJi0kRuL83D_kXxvCBoE1B8VauluPlJQL0fAtoBBo0q5AIFNssSDr5tsOcR/exec";
 
 const Glyphs = {
   camera: '\uf030',
@@ -29,41 +29,70 @@ function TabBarIcon({ name, color, size = 28 }: { name: IconName; color: string;
 function BroadcastBanner() {
   const [latestInvite, setLatestInvite] = useState<any>(null);
   const [fadeAnim] = useState(new Animated.Value(0));
-  const [isClient, setIsClient] = useState(false); // Added missing state here
-
-  useEffect(() => {
-    setIsClient(true);
-    fetchInvites();
-    const interval = setInterval(fetchInvites, 30000);
-    return () => clearInterval(interval);
-  }, []);
+  const [isClient, setIsClient] = useState(false);
 
   const fetchInvites = async () => {
     try {
-      const res = await fetch(`${API_URL}?action=getInvites&t=${Date.now()}`);
+      // Added mode and redirect for better GitHub Pages compatibility
+      const res = await fetch(`${API_URL}?action=getInvites&t=${Date.now()}`, {
+        method: 'GET',
+        mode: 'cors',
+        redirect: 'follow'
+      });
+      
+      if (!res.ok) throw new Error("Network response not ok");
+      
       const data = await res.json();
       if (Array.isArray(data) && data.length > 0) {
         const newest = data[0];
         const msgTime = new Date(newest.timestamp).getTime();
         const now = new Date().getTime();
-        const diffHours = (now - msgTime) / (1000 * 60 * 60);
+        const diffHours = Math.abs(now - msgTime) / (1000 * 60 * 60);
 
-        if (diffHours < 6) {
+        const isRecentInvite = diffHours < 6;
+
+        if (isRecentInvite) {
           setLatestInvite(newest);
-          Animated.timing(fadeAnim, { toValue: 1, duration: 1000, useNativeDriver: true }).start();
+          Animated.timing(fadeAnim, { 
+            toValue: 1, 
+            duration: 1000, 
+            useNativeDriver: Platform.OS !== 'web' 
+          }).start();
         } else {
           setLatestInvite(null);
         }
       }
-    } catch (e) { console.log("Banner error", e); }
+    } catch (e) { 
+      // Changed to silent log to avoid "Red Error" spam on refresh
+      console.warn("Banner fetch suppressed: Network warming up..."); 
+    }
   };
 
+  useEffect(() => {
+    setIsClient(true);
+    
+    // 1. Initial delay of 2.5 seconds to prevent NetworkError on hard refresh
+    const initialDelay = setTimeout(() => {
+      fetchInvites();
+    }, 1000);
+
+    // 2. Regular polling every 30 seconds
+    const interval = setInterval(fetchInvites, 30000);
+    
+    return () => {
+      clearTimeout(initialDelay);
+      clearInterval(interval);
+    };
+  }, []);
+
+  // Hydration guard
   if (!isClient || !latestInvite) return null;
 
   return (
     <Animated.View style={[styles.banner, { opacity: fadeAnim }]}>
       <Text style={styles.bannerText} numberOfLines={1}>
-        🚀 <Text style={{ fontWeight: 'bold' }}>{latestInvite.sender}:</Text> {latestInvite.message}
+        {latestInvite.type === 'Achievement' ? '🏆 ' : '🚀 '}
+        <Text style={{ fontWeight: 'bold' }}>{latestInvite.sender}:</Text> {latestInvite.message}
       </Text>
     </Animated.View>
   );
@@ -132,7 +161,8 @@ export default function TabLayout() {
     <View style={{ flex: 1, backgroundColor: '#fff' }}>
       <BroadcastBanner />
       <Tabs screenOptions={{ 
-        tabBarActiveTintColor: '#2196F3', 
+        tabBarActiveTintColor: '#2196F3',
+        headerShown: true,
         headerRight: () => <HeaderUserInfo />, 
         tabBarStyle: { height: 55 } 
       }}>

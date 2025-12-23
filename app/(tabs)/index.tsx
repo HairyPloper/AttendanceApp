@@ -2,9 +2,9 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useIsFocused } from '@react-navigation/native';
 import { BarcodeScanningResult, CameraView, useCameraPermissions } from 'expo-camera';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Keyboard, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Keyboard, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
-const API_URL = "";
+const API_URL = "https://script.google.com/macros/s/AKfycbxe1_meZCJi0kRuL83D_kXxvCBoE1B8VauluPlJQL0fAtoBBo0q5AIFNssSDr5tsOcR/exec";
 
 export default function ScanScreen() {
   const isFocused = useIsFocused();
@@ -122,8 +122,8 @@ export default function ScanScreen() {
         {isFocused ? (
           <CameraView 
             style={styles.camera} 
+            facing={Platform.OS === 'web' ? undefined : 'back'} 
             onBarcodeScanned={scanned ? undefined : handleBarCodeScanned} 
-            barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
           />
         ) : (
           <View style={[styles.camera, { backgroundColor: '#000' }]} />
@@ -157,12 +157,12 @@ const styles = StyleSheet.create({
   cameraContainer: { width: 280, height: 280, borderRadius: 40, overflow: 'hidden', borderWidth: 4, borderColor: '#f0f0f0', backgroundColor: '#000' },
   camera: { flex: 1 },
   hint: { marginTop: 25, color: '#aaa', fontSize: 14, fontWeight: '500' },
-  primaryButton: { backgroundColor: '#2196F3', paddingHorizontal: 50, paddingVertical: 16, borderRadius: 30, elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 3 },
+  primaryButton: { backgroundColor: '#2196F3', paddingHorizontal: 50, paddingVertical: 16, borderRadius: 30, ...Platform.select({web:{boxShadow:'0px 4px 10px rgba(0,0,0,0.2)'},default:{elevation:3}}) },
   buttonText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
   permissionTitle: { fontSize: 22, fontWeight: 'bold', marginBottom: 10, color: '#333' },
   permissionSubtitle: { fontSize: 14, color: '#777', textAlign: 'center', marginBottom: 30, paddingHorizontal: 20 },
   overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center' },
-  toast: { position: 'absolute', bottom: 40, left: 20, right: 20, padding: 16, borderRadius: 15, elevation: 10, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 5 },
+  toast: { position: 'absolute', bottom: 40, left: 20, right: 20, padding: 16, borderRadius: 15, ...Platform.select({web:{boxShadow:'0px 4px 10px rgba(0,0,0,0.3)'},default:{elevation:10}}) },
   success: { backgroundColor: '#4CAF50' },
   error: { backgroundColor: '#F44336' },
   info: { backgroundColor: '#2196F3' },

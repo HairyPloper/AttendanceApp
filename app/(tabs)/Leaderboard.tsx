@@ -7,7 +7,7 @@ import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
 import { getWithExpiry, saveWithExpiry } from '../../components/storageHelper';
 import { sharedStyles } from '../../components/styles';
 
-const API_URL = "https://script.google.com/macros/s/AKfycbxe1_meZCJi0kRuL83D_kXxvCBoE1B8VauluPlJQL0fAtoBBo0q5AIFNssSDr5tsOcR/exec";
+const API_URL = "";
 const EVENT_CACHE_KEY = "cached_event_list";
 const BOARD_CACHE_PREFIX = "cached_board_";
 
@@ -29,7 +29,7 @@ export default function Leaderboard() {
       // 1s safety delay for the actual fetch
       const timer = setTimeout(() => {
         loadInitialEvents();
-      }, 1000);
+      }, 100);
 
       return () => clearTimeout(timer);
     }

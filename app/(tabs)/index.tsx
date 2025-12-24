@@ -122,7 +122,6 @@ export default function ScanScreen() {
         {isFocused ? (
           <CameraView 
             style={styles.camera} 
-            facing={Platform.OS === 'web' ? undefined : 'back'} 
             onBarcodeScanned={scanned ? undefined : handleBarCodeScanned} 
             barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
           />

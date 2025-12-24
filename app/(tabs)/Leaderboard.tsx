@@ -29,7 +29,7 @@ export default function Leaderboard() {
       // 1s safety delay for the actual fetch
       const timer = setTimeout(() => {
         loadInitialEvents();
-      }, 1000);
+      }, 100);
 
       return () => clearTimeout(timer);
     }

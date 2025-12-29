@@ -7,7 +7,7 @@ import { getWithExpiry, saveWithExpiry } from '../../components/storageHelper';
 import { sharedStyles } from '../../components/styles';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const API_URL = "";
+const API_URL = " ";
 const EVENT_CACHE_KEY = "cached_event_list";
 
 const VISIT_MILESTONES = [

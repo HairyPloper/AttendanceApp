@@ -23,17 +23,13 @@ function TabBarIcon({ name, color, size = 28 }: { name: IconName; color: string;
   );
 }
 
-/**
- * BANNER COMPONENT
- */
 function BroadcastBanner() {
   const [latestInvite, setLatestInvite] = useState<any>(null);
   const [fadeAnim] = useState(new Animated.Value(0));
   const [isClient, setIsClient] = useState(false);
 
   const fetchInvites = async () => {
-    try {
-      // Added mode and redirect for better GitHub Pages compatibility
+      try {
       const res = await fetch(`${API_URL}?action=getInvites&t=${Date.now()}`, {
         method: 'GET',
         mode: 'cors',
@@ -71,7 +67,7 @@ function BroadcastBanner() {
   useEffect(() => {
     setIsClient(true);
     
-    // 1. Initial delay of 2.5 seconds to prevent NetworkError on hard refresh
+    // 1. Initial delay of 1 seconds to prevent NetworkError on hard refresh
     const initialDelay = setTimeout(() => {
       fetchInvites();
     }, 1000);

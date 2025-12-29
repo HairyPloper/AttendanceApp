@@ -1,14 +1,25 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useIsFocused } from '@react-navigation/native';
 import { BarcodeScanningResult, CameraView, useCameraPermissions } from 'expo-camera';
+import * as Haptics from 'expo-haptics';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Keyboard, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Keyboard,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
+} from 'react-native';
 
-const API_URL = "";
+const API_URL = " ";
 
 export default function ScanScreen() {
   const isFocused = useIsFocused();
   const [permission, requestPermission] = useCameraPermissions();
+  
+  // App State
   const [scanned, setScanned] = useState(false);
   const [name, setName] = useState<string>('');
   const [isRegistered, setIsRegistered] = useState<boolean>(false);
@@ -23,7 +34,7 @@ export default function ScanScreen() {
     setToast({ message, type });
     setTimeout(() => setToast(null), 4000);
   };
-
+  
   async function loadUser() {
     try {
       const savedName = await AsyncStorage.getItem('user_name');
@@ -38,12 +49,11 @@ export default function ScanScreen() {
 
   const handleRegister = async () => {
     const trimmedName = name.trim();
-    if (trimmedName.length < 2) return showToast("Unesi validno ime", 'error');
+    if (trimmedName.length < 2) return showToast("Unesi ime", 'error');
     
     try {
       Keyboard.dismiss();
       await AsyncStorage.setItem('user_name', trimmedName);
-      // We set local state so the UI switches to camera immediately
       setName(trimmedName);
       setIsRegistered(true);
       showToast(`Dobrodošao/la, ${trimmedName}!`, 'success');
@@ -57,6 +67,9 @@ export default function ScanScreen() {
     setScanned(true);
     setIsProcessing(true);
     
+    // Provide physical feedback that scan was successful
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    
     try {
       const response = await fetch(API_URL, {
         method: 'POST',
@@ -66,10 +79,15 @@ export default function ScanScreen() {
 
       const resultText = await response.text();
       
-      if (resultText.includes("Checkout")) {
-        showToast(`Odjavljen: ${result.data}`, 'success');
-      } else if (resultText.includes("Success")) {
-        showToast(`Prijavljen: ${result.data}`, 'success');
+      if (resultText.includes("Checkout") || resultText.includes("Success")) {
+        // Clear local caches to force other screens to refresh
+        await AsyncStorage.removeItem(`cache_history_${name.trim()}`);
+        await AsyncStorage.removeItem("cached_leaderboard_Global Overall");
+        
+        const msg = resultText.includes("Checkout") 
+          ? `Odjavljen: ${result.data}` 
+          : `Prijavljen: ${result.data}`;
+        showToast(msg, 'success');
       } else {
         showToast(resultText, 'info');
       }
@@ -77,7 +95,7 @@ export default function ScanScreen() {
       showToast("Greška u konekciji.", 'error');
     } finally {
       setIsProcessing(false);
-      // Cooldown to prevent double scans
+      // Short delay before allowing the next scan
       setTimeout(() => setScanned(false), 3000);
     }
   };
@@ -98,7 +116,7 @@ export default function ScanScreen() {
     return (
       <View style={styles.container}>
         <Text style={styles.title}>Šmiber</Text>
-        <Text style={styles.subtitle}>Unesi svoje ime da započneš</Text>
+        {/* <Text style={styles.subtitle}>Unesi ime</Text> */}
         <TextInput 
           style={styles.input} 
           value={name} 
@@ -116,27 +134,31 @@ export default function ScanScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.attendeeLabel}>Prijavljeni ste kao: <Text style={{ color: '#2196F3', fontWeight: 'bold' }}>{name}</Text></Text>
+      {/* <Text style={styles.attendeeLabel}>
+        Prijavljen kao: <Text style={{ color: '#2196F3', fontWeight: 'bold' }}>{name}</Text>
+      </Text> */}
       
       <View style={styles.cameraContainer}>
         {isFocused ? (
           <CameraView 
             style={styles.camera} 
+            facing="back"
             onBarcodeScanned={scanned ? undefined : handleBarCodeScanned} 
             barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
           />
         ) : (
           <View style={[styles.camera, { backgroundColor: '#000' }]} />
         )}
+
         {isProcessing && (
           <View style={styles.overlay}>
             <ActivityIndicator size="large" color="#fff" />
-            <Text style={{color: '#fff', marginTop: 10}}>Slanje podataka...</Text>
+            <Text style={{color: '#fff', marginTop: 10}}>Obrađujem...</Text>
           </View>
         )}
       </View>
 
-      <Text style={styles.hint}>{scanned ? "Obrađujem..." : "Skeniraj QR kod na lokaciji"}</Text>
+      <Text style={styles.relaxedText}>{scanned ? "Šaljem podatke u Šmiber bazu..." : "Skeniraj QR"}</Text>
 
       {toast && (
         <View style={[styles.toast, styles[toast.type]]}>
@@ -157,14 +179,23 @@ const styles = StyleSheet.create({
   cameraContainer: { width: 280, height: 280, borderRadius: 40, overflow: 'hidden', borderWidth: 4, borderColor: '#f0f0f0', backgroundColor: '#000' },
   camera: { flex: 1 },
   hint: { marginTop: 25, color: '#aaa', fontSize: 14, fontWeight: '500' },
-  primaryButton: { backgroundColor: '#2196F3', paddingHorizontal: 50, paddingVertical: 16, borderRadius: 30, ...Platform.select({web:{boxShadow:'0px 4px 10px rgba(0,0,0,0.2)'},default:{elevation:3}}) },
+  primaryButton: { backgroundColor: '#2196F3', paddingHorizontal: 50, paddingVertical: 16, borderRadius: 30 },
   buttonText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
   permissionTitle: { fontSize: 22, fontWeight: 'bold', marginBottom: 10, color: '#333' },
   permissionSubtitle: { fontSize: 14, color: '#777', textAlign: 'center', marginBottom: 30, paddingHorizontal: 20 },
   overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center' },
-  toast: { position: 'absolute', bottom: 40, left: 20, right: 20, padding: 16, borderRadius: 15, ...Platform.select({web:{boxShadow:'0px 4px 10px rgba(0,0,0,0.3)'},default:{elevation:10}}) },
+  toast: { position: 'absolute', bottom: 40, left: 20, right: 20, padding: 16, borderRadius: 15, elevation: 10 },
   success: { backgroundColor: '#4CAF50' },
   error: { backgroundColor: '#F44336' },
   info: { backgroundColor: '#2196F3' },
-  toastText: { color: '#fff', fontWeight: '600', textAlign: 'center', fontSize: 15 }
+  toastText: { color: '#fff', fontWeight: '600', textAlign: 'center', fontSize: 15 },
+  relaxedText: {
+  color: '#2196F3', 
+  marginTop: 15, 
+  fontSize: 16, 
+  fontWeight: '500', 
+  textAlign: 'center',
+  fontStyle: 'italic', // Italic makes it feel less like a "command"
+  paddingHorizontal: 20
+},
 });

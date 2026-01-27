@@ -1,4 +1,3 @@
-export const API_URL = "";
 
 export interface HistoryItem {
   checkin: string;

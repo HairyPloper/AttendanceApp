@@ -34,7 +34,7 @@
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/favicon.png",
+      "favicon": "./assets/images/favicon-v2.png",
       "publicPath": "/AttendanceApp"
     },
     "plugins": [
@@ -42,7 +42,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow AttendanceApp to access your camera to scan QR codes."
+          "cameraPermission": "Allow camera to scan QR codes."
         }
       ]
     ],

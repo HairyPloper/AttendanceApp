@@ -12,23 +12,23 @@ interface TitleResult {
 export default function TitlesScreen() {
   const [titles, setTitles] = useState<TitleResult[]>([]);
   const [events, setEvents] = useState<string[]>([]);
-  const [selectedEvent, setSelectedEvent] = useState('Global Overall');
+  const [selectedEvent, setSelectedEvent] = useState('Ukupno');
   const [loading, setLoading] = useState(true);
 
   const icons: Record<string, string> = {
     'Most Reliable': '💪',
-    'Marathoner': '🏃‍♂️',
+    Marathoner: '🏃‍♂️',
     'Early Bird': '🐦',
     'One-Hour Wonder': '⏱️',
-    'Ghost': '👻',
+    Ghost: '👻',
   };
 
   const descriptions: Record<string, string> = {
     'Most Reliable': 'Always shows up. Rain, snow, apocalypse.',
-    'Marathoner': 'Stayed so long even the lights wanted to leave.',
+    Marathoner: 'Stayed so long even the lights wanted to leave.',
     'Early Bird': 'Arrived before the event knew it started.',
     'One-Hour Wonder': 'Fast, efficient, gone before coffee cooled.',
-    'Ghost': 'Seen rarely. Proof still under investigation.',
+    Ghost: 'Seen rarely. Proof still under investigation.',
   };
 
   useEffect(() => {
@@ -38,13 +38,13 @@ export default function TitlesScreen() {
   const loadEvents = async () => {
     const res = await fetch(`${API_URL}?action=getEventList&t=${Date.now()}`);
     const list = await res.json();
-    setEvents(['Global Overall', ...list]);
-    loadTitles('Global Overall');
+    setEvents(['Ukupno', ...list]);
+    loadTitles('Ukupno');
   };
 
   const loadTitles = async (event: string) => {
     setLoading(true);
-    const filter = event === 'Global Overall' ? '' : event;
+    const filter = event === 'Ukupno' ? '' : event;
     const res = await fetch(
       `${API_URL}?action=getRankings&event=${encodeURIComponent(filter)}&t=${Date.now()}`
     );
@@ -58,7 +58,7 @@ export default function TitlesScreen() {
         <Text style={styles.headerTitle}>Titule</Text>
         <Picker
           selectedValue={selectedEvent}
-          onValueChange={v => {
+          onValueChange={(v) => {
             setSelectedEvent(v);
             loadTitles(v);
           }}

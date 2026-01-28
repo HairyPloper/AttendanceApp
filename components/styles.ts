@@ -3,83 +3,88 @@ import { Platform, StyleSheet } from 'react-native';
 // We use 'export' here so other files can see 'sharedStyles'
 export const sharedStyles = StyleSheet.create({
   scrollContainer: { padding: 15 },
-  profileHeader: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
-    backgroundColor: '#fff', 
-    padding: 20, 
-    borderRadius: 15, 
-    marginBottom: 15, 
-    elevation: 2 
+  profileHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    padding: 20,
+    borderRadius: 15,
+    marginBottom: 15,
+    elevation: 2,
   },
   welcomeText: { fontSize: 12, color: '#888' },
   userNameText: { fontSize: 20, fontWeight: 'bold', color: '#333' },
-  refreshBtn: { 
-    backgroundColor: '#2196F3', 
-    paddingHorizontal: 20, 
-    paddingVertical: 10, 
-    borderRadius: 12 
+  refreshBtn: {
+    backgroundColor: '#2196F3',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 12,
   },
-  dataBox: { 
-    backgroundColor: '#fff', 
-    padding: 15, 
-    borderRadius: 15, 
-    elevation: 3 
+  dataBox: {
+    backgroundColor: '#fff',
+    padding: 15,
+    borderRadius: 15,
+    elevation: 3,
   },
-  headerRow: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
-    marginBottom: 15, 
-    borderBottomWidth: 1, 
-    borderBottomColor: '#f0f0f0', 
-    paddingBottom: 10 
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+    paddingBottom: 10,
   },
   subTitle: { fontWeight: 'bold', fontSize: 18, color: '#333' },
-  pickerContainer: { 
-    height: 45, 
-    width: 140, 
-    backgroundColor: '#f9f9f9', 
-    borderRadius: 8, 
-    overflow: 'hidden', 
-    borderWidth: 1, 
-    borderColor: '#eee' 
+  pickerContainer: {
+    height: 45,
+    width: 140,
+    backgroundColor: '#f9f9f9',
+    borderRadius: 8,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#eee',
   },
   picker: { height: 45, width: '100%' },
-  historyItemContainer: { 
-    paddingVertical: 15, 
-    borderBottomWidth: 1, 
-    borderBottomColor: '#f0f0f0' 
+  historyItemContainer: {
+    paddingVertical: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
   },
-  historyTopRow: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    marginBottom: 8 
+  historyTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
   },
   itemEventText: { fontSize: 16, fontWeight: '600', color: '#444' },
   durationText: { color: '#2196F3', fontWeight: 'bold' },
   timeDetailsRow: { flexDirection: 'row', justifyContent: 'space-between' },
   timeBlock: { flex: 1 },
-  timeLabel: { fontSize: 10, color: '#999', marginBottom: 2 },
+  timeLabel: {
+    fontSize: 11,
+    color: '#999',
+    marginBottom: 2,
+    fontStyle: 'italic',
+  },
   dateText: { color: '#555', fontSize: 12, fontWeight: '500' },
-  listItem: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    paddingVertical: 12, 
-    borderBottomWidth: 1, 
-    borderBottomColor: '#f9f9f9', 
-    alignItems: 'center' 
+  listItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f9f9f9',
+    alignItems: 'center',
   },
   itemText: { fontSize: 16 },
   timeSubtext: { fontSize: 11, color: '#888', marginLeft: 26 },
   countText: { fontWeight: 'bold', color: '#2196F3', fontSize: 14 },
   emptyText: { textAlign: 'center', color: '#999', marginVertical: 30 },
-  paginationRow: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
-    marginTop: 15 
+  paginationRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 15,
   },
   pageInfo: { fontSize: 12, color: '#666' },
   chipContainer: {
@@ -103,7 +108,10 @@ export const sharedStyles = StyleSheet.create({
   },
   activeChip: {
     backgroundColor: '#fff', // White "card" look for the active item
-    ...Platform.select({web:{boxShadow:'0px 4px 10px rgba(0,0,0,0.1)'},default:{elevation:2}})
+    ...Platform.select({
+      web: { boxShadow: '0px 4px 10px rgba(0,0,0,0.1)' },
+      default: { elevation: 2 },
+    }),
   },
   chipText: {
     fontSize: 14,
@@ -115,7 +123,7 @@ export const sharedStyles = StyleSheet.create({
     fontWeight: 'bold',
   },
   modernPickerWrapper: {
-    width: 160,
+    width: 120,
     height: 40,
     position: 'relative',
   },
@@ -148,7 +156,7 @@ export const sharedStyles = StyleSheet.create({
   },
   chevronIcon: {
     fontFamily: 'LocalFontAwesome',
-    fontSize: 12,
+    fontSize: 11,
     color: '#2196F3',
     marginLeft: 4,
   },

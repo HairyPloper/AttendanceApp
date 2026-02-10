@@ -5,16 +5,17 @@ import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Keyboard,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Keyboard,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
 } from 'react-native';
+import { getSecurityCredentials } from '../../components/securityHelper';
 
-const API_URL = '';
+const API_URL = 'api_url_go';
 
 export default function ScanScreen() {
   const isFocused = useIsFocused();
@@ -72,22 +73,22 @@ export default function ScanScreen() {
     setScanned(true);
     setIsProcessing(true);
 
-    // Provide physical feedback that scan was successful
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
+    const { secret } = await getSecurityCredentials();
     try {
       const response = await fetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ name: name.trim(), event: result.data.trim() }),
+        body: JSON.stringify({ name: name.trim(), secret: secret, event: result.data.trim() }),
       });
 
       const resultText = await response.text();
 
       if (resultText.includes('Checkout') || resultText.includes('Success')) {
-        // Clear local caches to force other screens to refresh
         await AsyncStorage.removeItem(`cache_history_${name.trim()}`);
-        await AsyncStorage.removeItem('cached_leaderboard_Global Overall');
+        await AsyncStorage.removeItem(`cached_event_list`);
+        await AsyncStorage.removeItem('cached_leaderboard_Ukupno');
 
         const msg = resultText.includes('Checkout')
           ? `Odjavljen: ${result.data}`
@@ -95,7 +96,6 @@ export default function ScanScreen() {
 
         showToast(msg, 'success');
 
-        // Navigate to history after a short delay to show the toast
         setTimeout(() => {
           router.replace('/UserHistory');
         }, 2000);
@@ -106,8 +106,7 @@ export default function ScanScreen() {
       showToast('Greška u konekciji.', 'error');
     } finally {
       setIsProcessing(false);
-      // Short delay before allowing the next scan
-      setTimeout(() => setScanned(false), 3000);
+      setTimeout(() => setScanned(false), 5000);
     }
   };
 
@@ -178,6 +177,7 @@ export default function ScanScreen() {
       <Text style={styles.relaxedText}>
         {scanned ? 'Šaljem podatke u Šmiber bazu...' : 'Skeniraj QR'}
       </Text>
+      <Text style={styles.tinySecureText}>🛡️Sigurnost garantuje Dinčo Vangard</Text>
 
       {toast && (
         <View style={[styles.toast, styles[toast.type]]}>
@@ -195,6 +195,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#fff',
   },
+  tinySecureText: {
+    textAlign: 'center',
+    fontSize: 9,
+    color: '#bbb',
+    marginTop: 8,
+    textTransform: 'uppercase',
+  },
   centered: {
     flex: 1,
     justifyContent: 'center',
@@ -208,11 +215,6 @@ const styles = StyleSheet.create({
     color: '#2196F3',
     marginBottom: 10,
   },
-  subtitle: {
-    fontSize: 16,
-    color: '#666',
-    marginBottom: 30,
-  },
   input: {
     backgroundColor: '#f9f9f9',
     borderWidth: 1,
@@ -224,17 +226,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 18,
     color: '#333',
-  },
-  attendeeLabel: {
-    fontSize: 16,
-    marginBottom: 20,
-    color: '#444',
-  },
-  hint: {
-    marginTop: 25,
-    color: '#aaa',
-    fontSize: 14,
-    fontWeight: '500',
   },
   primaryButton: {
     backgroundColor: '#2196F3',
@@ -269,15 +260,9 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     elevation: 10,
   },
-  success: {
-    backgroundColor: '#4CAF50',
-  },
-  error: {
-    backgroundColor: '#F44336',
-  },
-  info: {
-    backgroundColor: '#2196F3',
-  },
+  success: { backgroundColor: '#4CAF50' },
+  error: { backgroundColor: '#F44336' },
+  info: { backgroundColor: '#2196F3' },
   toastText: {
     color: '#fff',
     fontWeight: '600',
@@ -302,9 +287,7 @@ const styles = StyleSheet.create({
     borderColor: '#f0f0f0',
     backgroundColor: '#000',
   },
-  camera: {
-    flex: 1,
-  },
+  camera: { flex: 1 },
   scannerTargetContainer: {
     flex: 1,
     justifyContent: 'center',

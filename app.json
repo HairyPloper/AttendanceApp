@@ -26,8 +26,7 @@
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO",
-        "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO"
+        "android.permission.INTERNET"
       ],
       "package": "com.anonymous.AttendanceApp"
     },
@@ -42,9 +41,11 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow camera to scan QR codes."
+          "cameraPermission": "Allow camera to scan QR codes.",
+          "microphonePermission": "Allow microphone for voice rooms."
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,

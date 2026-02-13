@@ -11,8 +11,7 @@ import {
 } from 'react-native';
 import { sharedStyles } from '../../components/styles';
 
-const API_URL =
-  'https://script.google.com/macros/s/AKfycbxe1_meZCJi0kRuL83D_kXxvCBoE1B8VauluPlJQL0fAtoBBo0q5AIFNssSDr5tsOcR/exec';
+const API_URL = 'api_url_go';
 
 interface RankingItem {
   name: string;

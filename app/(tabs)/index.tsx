@@ -15,8 +15,7 @@ import {
 } from 'react-native';
 import { getSecurityCredentials } from '../../components/securityHelper';
 
-const API_URL =
-  'https://script.google.com/macros/s/AKfycbxe1_meZCJi0kRuL83D_kXxvCBoE1B8VauluPlJQL0fAtoBBo0q5AIFNssSDr5tsOcR/exec';
+const API_URL = 'api_url_go';
 
 export default function ScanScreen() {
   const isFocused = useIsFocused();

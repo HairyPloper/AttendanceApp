@@ -16,7 +16,8 @@ import { getSecurityCredentials } from '../../components/securityHelper';
 import { getWithExpiry, saveWithExpiry } from '../../components/storageHelper';
 import { sharedStyles } from '../../components/styles';
 
-const API_URL = 'api_url_go';
+const API_URL =
+  'https://script.google.com/macros/s/AKfycbxe1_meZCJi0kRuL83D_kXxvCBoE1B8VauluPlJQL0fAtoBBo0q5AIFNssSDr5tsOcR/exec';
 const EVENT_CACHE_KEY = 'cached_event_list';
 
 const VISIT_MILESTONES = [

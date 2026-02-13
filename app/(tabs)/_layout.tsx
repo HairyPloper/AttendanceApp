@@ -1,5 +1,4 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useMicrophonePermissions } from 'expo-camera';
 import { useFonts } from 'expo-font';
 import { Tabs } from 'expo-router';
 import React, { useEffect, useState } from 'react';
@@ -16,7 +15,8 @@ import {
 } from 'react-native';
 import { getSecurityCredentials } from '../../components/securityHelper';
 
-const API_URL = 'api_url_go';
+const API_URL =
+  'https://script.google.com/macros/s/AKfycbxe1_meZCJi0kRuL83D_kXxvCBoE1B8VauluPlJQL0fAtoBBo0q5AIFNssSDr5tsOcR/exec';
 
 const Glyphs = {
   camera: '\uf030',
@@ -101,7 +101,6 @@ export default function TabLayout() {
   const [modalVisible, setModalVisible] = useState(false);
   const [msg, setMsg] = useState('');
   const [isSending, setIsSending] = useState(false);
-  const [micPermission, requestMicPermission] = useMicrophonePermissions();
 
   const [fontsLoaded] = useFonts({
     LocalFontAwesome: require('../../assets/FontAwesome.ttf'),
@@ -146,8 +145,6 @@ export default function TabLayout() {
   const handleOpenVoiceRoom = async () => {
     const nameParam = encodeURIComponent(userName || 'Gost');
     const url = `https://hairyploper.github.io/voice-room-web/?name=${nameParam}`;
-
-    requestMicPermission();
 
     try {
       await Linking.openURL(url);

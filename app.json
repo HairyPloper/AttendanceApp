@@ -41,8 +41,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow camera to scan QR codes.",
-          "microphonePermission": "Allow microphone for voice rooms."
+          "cameraPermission": "Allow camera to scan QR codes."
         }
       ],
       "expo-web-browser"

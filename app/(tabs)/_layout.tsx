@@ -1,5 +1,4 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useMicrophonePermissions } from 'expo-camera';
 import { useFonts } from 'expo-font';
 import { Tabs } from 'expo-router';
 import React, { useEffect, useState } from 'react';
@@ -101,7 +100,6 @@ export default function TabLayout() {
   const [modalVisible, setModalVisible] = useState(false);
   const [msg, setMsg] = useState('');
   const [isSending, setIsSending] = useState(false);
-  const [micPermission, requestMicPermission] = useMicrophonePermissions();
 
   const [fontsLoaded] = useFonts({
     LocalFontAwesome: require('../../assets/FontAwesome.ttf'),
@@ -146,8 +144,6 @@ export default function TabLayout() {
   const handleOpenVoiceRoom = async () => {
     const nameParam = encodeURIComponent(userName || 'Gost');
     const url = `https://hairyploper.github.io/voice-room-web/?name=${nameParam}`;
-
-    requestMicPermission();
 
     try {
       await Linking.openURL(url);

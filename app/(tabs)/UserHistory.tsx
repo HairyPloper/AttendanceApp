@@ -3,14 +3,14 @@ import { Picker } from '@react-native-picker/picker';
 import { useIsFocused } from '@react-navigation/native';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Image,
-    Modal,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Image,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { getSecurityCredentials } from '../../components/securityHelper';
 import { getWithExpiry, saveWithExpiry } from '../../components/storageHelper';

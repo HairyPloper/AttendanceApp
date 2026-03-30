@@ -22,7 +22,7 @@ const EVENT_CACHE_KEY = 'cached_event_list';
 const VISIT_MILESTONES = [
   { limit: 1, label: 'Srednjoškolac', img: 'visits_1', sub: 'Ide u srednju školu.' },
   { limit: 5, label: 'Gaijin', img: 'visits_5', sub: 'Još uvek stranac.' },
-  { limit: 10, label: 'Street Racer', img: 'visits_10', sub: 'Dobro poznaje miris afalta.' },
+  { limit: 10, label: 'Street Racer', img: 'visits_10', sub: 'Dobro poznaje miris asfalta.' },
   { limit: 25, label: 'Challenger', img: 'visits_25', sub: 'Ulice ga poznaju.' },
   { limit: 50, label: 'Han', img: 'visits_50', sub: 'Ima svoju garažu.' },
   { limit: 100, label: 'D.K. (Legend)', img: 'visits_100', sub: 'Gospodar planine.' },

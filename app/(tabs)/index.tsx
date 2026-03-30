@@ -173,12 +173,12 @@ export default function ScanScreen() {
           </View>
         )}
       </View>
-
       <Text style={styles.relaxedText}>
         {scanned ? 'Šaljem podatke u Šmiber bazu...' : 'Skeniraj QR'}
       </Text>
-      <Text style={styles.tinySecureText}>🛡️Sigurnost garantuje Dinčo Vangard</Text>
-
+      <Text style={styles.tinySecureText}>
+        <Text style={{ fontSize: 16 }}>🛡️</Text>Sigurnost garantuje Dinčo Vangard
+      </Text>
       {toast && (
         <View style={[styles.toast, styles[toast.type]]}>
           <Text style={styles.toastText}>{toast.message}</Text>

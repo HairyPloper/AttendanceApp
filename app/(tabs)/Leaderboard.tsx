@@ -1,6 +1,6 @@
 import { Picker } from '@react-native-picker/picker';
 import { useIsFocused } from '@react-navigation/native';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   ScrollView,
@@ -12,6 +12,67 @@ import {
 import { sharedStyles } from '../../components/styles';
 
 const API_URL = 'api_url_go';
+
+const HOST_LOCATION_MAP: { user: string; location: string }[] = [
+  { user: 'Pako', location: 'PAKISTAN' },
+  { user: 'Makaron', location: 'MAKISTAN' },
+  { user: 'Miky', location: 'MYKYSTAN' },
+  { user: 'Shomi', location: 'SOMISTAN' },
+  { user: 'Toške', location: 'TOSESTAN' },
+];
+
+const PROFILE_ICON_MAP: { user: string; icon: string }[] = [
+  { user: 'Pako', icon: '🦀' },
+  { user: 'Makaron', icon: '🪑' },
+  { user: 'Miky', icon: '🐦‍⬛' },
+  { user: 'Shomi', icon: '🎲' },
+  { user: 'Toške', icon: '🔥' },
+  { user: 'Anton', icon: '🏴‍☠️' },
+  { user: 'Dady', icon: '🍔' },
+  { user: 'Pjeki', icon: '👥' },
+  { user: 'Nena', icon: '🎓' },
+  { user: 'Emilija', icon: '🍓' },
+  { user: 'Džoni', icon: '🍆' },
+  { user: 'Nini', icon: '🥷🏻' },
+  { user: 'Dika Bulevarac', icon: '👨‍🦯' },
+  { user: 'Dincha', icon: '🐈' },
+];
+
+// Generate initials-based avatar
+// Or get icon if exists in map PROFILE_ICON_MAP
+const getInitials = (name: string): string => {
+  const mapping = PROFILE_ICON_MAP.find((m) => m.user.toLowerCase() === name.toLowerCase());
+  if (mapping != null) {
+    return mapping.icon;
+  }
+
+  const words = name.trim().split(' ');
+  if (words.length >= 2) {
+    return (words[0][0] + words[1][0]).toUpperCase();
+  }
+  return name.substring(0, 2).toUpperCase();
+};
+
+// Generate color based on name
+const getAvatarColor = (name: string): string => {
+  const colors = [
+    '#FF6B6B',
+    '#4ECDC4',
+    '#45B7D1',
+    '#FFA07A',
+    '#98D8C8',
+    '#F7DC6F',
+    '#BB8FCE',
+    '#85C1E2',
+    '#F8B739',
+    '#52B788',
+  ];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return colors[Math.abs(hash) % colors.length];
+};
 
 interface RankingItem {
   name: string;
@@ -25,13 +86,25 @@ interface RankingsData {
   locationRanking: RankingItem[];
 }
 
+function msToTimeStr(ms: number): string {
+  const totalSec = Math.floor(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  return `${h}h ${m}m ${s}s`;
+}
+
 export default function Leaderboard() {
   const isFocused = useIsFocused();
   const [data, setData] = useState<RankingsData>({ userRanking: [], locationRanking: [] });
   const [eventList, setEventList] = useState<string[]>(['Ukupno']);
   const [selectedEvent, setSelectedEvent] = useState<string>('Ukupno');
-  const [loading, setLoading] = useState(false);
+  const [loadingTop, setLoadingTop] = useState(false);
   const [isClient, setIsClient] = useState(false);
+  const [activeTab, setActiveTab] = useState<'smiberi' | 'ugostitelj' | 'total'>('smiberi');
+
+  // We keep an unfiltered snapshot of the leaderboard data to build the "Ukupno Osveženje" ranking.
+  const allTimeData = useRef<RankingsData>({ userRanking: [], locationRanking: [] });
 
   // Pagination for User Table
   const [userPage, setUserPage] = useState(1);
@@ -50,6 +123,37 @@ export default function Leaderboard() {
     locPage * rowsPerPageLoc
   );
   const totalLocPages = Math.ceil(data.locationRanking.length / rowsPerPageLoc);
+
+  const [combinedRanking, setCombinedRanking] = useState<
+    { name: string; location: string | null; total: number; totalMs: number; timeStr: string }[]
+  >([]);
+
+  const buildCombinedRanking = () => {
+    const snapshot = allTimeData.current;
+    const result = snapshot.userRanking.map((userEntry) => {
+      const mapping = HOST_LOCATION_MAP.find(
+        (m) => m.user.toLowerCase() === userEntry.name.toLowerCase()
+      );
+      const locEntry = mapping
+        ? snapshot.locationRanking.find(
+            (r) => r.name.toLowerCase() === mapping.location.toLowerCase()
+          )
+        : undefined;
+
+      const totalMs = userEntry.totalMs + (locEntry?.totalMs ?? 0);
+      const total = userEntry.total + (locEntry?.total ?? 0);
+
+      return {
+        name: userEntry.name,
+        location: mapping?.location ?? null,
+        total,
+        totalMs,
+        timeStr: locEntry ? msToTimeStr(totalMs) : userEntry.timeStr,
+      };
+    });
+    result.sort((a, b) => b.totalMs - a.totalMs);
+    setCombinedRanking(result);
+  };
 
   useEffect(() => {
     setIsClient(true);
@@ -72,7 +176,7 @@ export default function Leaderboard() {
   };
 
   const fetchRankings = async (eventFilter: string) => {
-    setLoading(true);
+    setLoadingTop(true);
     try {
       const filter = eventFilter === 'Ukupno' ? '' : eventFilter;
       const res = await fetch(
@@ -88,222 +192,334 @@ export default function Leaderboard() {
 
       setData(json);
       setUserPage(1);
+
+      if (!filter && allTimeData.current.userRanking.length === 0) {
+        allTimeData.current = json;
+        buildCombinedRanking();
+      }
     } catch (e) {
       console.warn('Ranking fetch failed');
     } finally {
-      setLoading(false);
+      setLoadingTop(false);
     }
   };
 
   if (!isClient) return null;
 
+  // Render circular profile design for Total Osveženje tab
+  const renderTopThree = (rankings: any[]) => {
+    if (rankings.length === 0) return <Text style={styles.emptyText}>Nema podataka...</Text>;
+
+    const topThree = rankings.slice(0, 3);
+    const positions = [1, 0, 2]; // Order: 2nd, 1st, 3rd for visual layout
+
+    return (
+      <View style={styles.podiumContainer}>
+        <View style={styles.topThreeRow}>
+          {positions.map((index) => {
+            const person = topThree[index];
+            if (!person) return null;
+
+            const rank = index + 1;
+            const size = rank === 1 ? 100 : 85;
+            const medalColor = rank === 1 ? '#FFD700' : rank === 2 ? '#C0C0C0' : '#CD7F32';
+            const initials = getInitials(person.name);
+            const bgColor = getAvatarColor(person.name);
+
+            return (
+              <View key={index} style={[styles.podiumItem, rank === 1 && styles.podiumFirst]}>
+                <View style={[styles.avatarContainer, { width: size, height: size }]}>
+                  <View style={[styles.avatarCircle, { backgroundColor: bgColor }]}>
+                    <Text style={[styles.initialsText, { fontSize: size / 3 }]}>{initials}</Text>
+                  </View>
+                  <View style={[styles.rankBadge, { backgroundColor: medalColor }]}>
+                    <Text style={styles.rankNumber}>{rank}</Text>
+                  </View>
+                </View>
+                <Text style={styles.podiumName} numberOfLines={1}>
+                  {person.name}
+                </Text>
+                <Text style={styles.podiumPoints}>{person.timeStr}</Text>
+                <Text style={styles.podiumTime}>{person.total}x poseta</Text>
+              </View>
+            );
+          })}
+        </View>
+      </View>
+    );
+  };
+
+  const renderRemainingRanks = (rankings: any[]) => {
+    if (rankings.length <= 3) return null;
+
+    const remaining = rankings.slice(3, 10); // Show positions 4-9
+
+    return (
+      <View style={styles.remainingContainer}>
+        {remaining.map((person, index) => {
+          const rank = index + 4;
+          const initials = getInitials(person.name);
+          const bgColor = getAvatarColor(person.name);
+
+          return (
+            <View key={index} style={styles.remainingRow}>
+              <View style={styles.remainingLeft}>
+                <View style={styles.smallAvatarContainer}>
+                  <View style={[styles.smallAvatarCircle, { backgroundColor: bgColor }]}>
+                    <Text style={styles.smallInitialsText}>{initials}</Text>
+                  </View>
+                </View>
+                <View style={styles.remainingInfo}>
+                  <Text style={styles.remainingRank}>{rank}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.remainingName}>{person.name}</Text>
+                    <Text style={styles.remainingStats}>
+                      {person.timeStr} • {person.total}x poseta
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+          );
+        })}
+      </View>
+    );
+  };
+
   return (
     <View style={{ flex: 1, backgroundColor: '#F2F2F7' }}>
+      {/* Tab Navigation */}
+      <View style={styles.tabContainer}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'smiberi' && styles.activeTab]}
+          onPress={() => setActiveTab('smiberi')}
+        >
+          <Text style={[styles.tabText, activeTab === 'smiberi' && styles.activeTabText]}>
+            👑 Šmiberi
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'ugostitelj' && styles.activeTab]}
+          onPress={() => setActiveTab('ugostitelj')}
+        >
+          <Text style={[styles.tabText, activeTab === 'ugostitelj' && styles.activeTabText]}>
+            📍 Ugostitelji
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'total' && styles.activeTab]}
+          onPress={() => setActiveTab('total')}
+        >
+          <Text style={[styles.tabText, activeTab === 'total' && styles.activeTabText]}>
+            🍹Osveženje
+          </Text>
+        </TouchableOpacity>
+      </View>
+
       <ScrollView
         contentContainerStyle={sharedStyles.scrollContainer}
         showsVerticalScrollIndicator={false}
       >
-        {/* DOMAĆIN MESECA EXPLANATION BOX */}
-        {/* <View style={localStyles.domacinCard}>
-          <View style={localStyles.cardHeader}>
-            <Text style={localStyles.cardIcon}>🏠</Text>
-            <Text style={localStyles.cardTitle}>DOMAĆIN MESECA</Text>
-          </View>
-          <Text style={localStyles.cardDescription}>
-            Bodovanje se vrši na osnovu <Text style={{fontWeight: 'bold'}}>sume vaših najdužih dnevnih boravaka</Text>. 
-            Gledamo ko provodi najkvalitetnije vreme na lokacijama!
-          </Text>
-        </View> */}
+        {/* TAB 1: TOP ŠMIBERI */}
+        {activeTab === 'smiberi' && (
+          <View style={sharedStyles.dataBox}>
+            <View style={sharedStyles.headerRow}>
+              <Text style={localStyles.sectionTitle}>👑 Top Šmiberi</Text>
 
-        <View style={sharedStyles.dataBox}>
-          <View style={sharedStyles.headerRow}>
-            <Text style={localStyles.sectionTitle}>📍 Top Ugostitelj</Text>
-          </View>
-          {paginatedLocations.length === 0 ? (
-            <Text style={sharedStyles.emptyText}>Nema podataka za lokacije.</Text>
-          ) : (
-            paginatedLocations.map((item, i) => {
-              // Unique index calculation for Locations
-              const locGlobalIdx = (locPage - 1) * rowsPerPageLoc + i;
-              return (
-                <View key={locGlobalIdx} style={sharedStyles.listItem}>
-                  <View style={{ flex: 1 }}>
-                    <Text
-                      style={[sharedStyles.itemText, locGlobalIdx < 3 && { fontWeight: 'bold' }]}
-                    >
-                      {locGlobalIdx === 0 ? '🏆 ' : `${locGlobalIdx + 1}. `}
-                      {item.name}
-                    </Text>
-                    <Text style={sharedStyles.timeSubtext}>Vreme: {item.timeStr}</Text>
-                  </View>
-                  <View style={localStyles.dayBadge}>
-                    <Text style={localStyles.dayBadgeText}>{item.total}x</Text>
-                  </View>
+              <View style={sharedStyles.modernPickerWrapper}>
+                <View style={sharedStyles.visualPickerContainer}>
+                  <Text style={sharedStyles.pickerText} numberOfLines={1}>
+                    {selectedEvent}
+                  </Text>
+                  <Text style={sharedStyles.chevronIcon}>{'\uf0d7'}</Text>
                 </View>
-              );
-            })
-          )}
-
-          {data.locationRanking.length > rowsPerPageLoc && (
-            <View style={sharedStyles.paginationRow}>
-              <TouchableOpacity disabled={locPage === 1} onPress={() => setLocPage((p) => p - 1)}>
-                <Text style={[localStyles.pageAction, locPage === 1 && { color: '#C7C7CC' }]}>
-                  Nazad
-                </Text>
-              </TouchableOpacity>
-
-              <View style={localStyles.pageDisplay}>
-                <Text style={sharedStyles.pageInfo}>
-                  {locPage} / {totalLocPages}
-                </Text>
-              </View>
-
-              <TouchableOpacity
-                disabled={locPage === totalLocPages}
-                onPress={() => setLocPage((p) => p + 1)}
-              >
-                <Text
-                  style={[
-                    localStyles.pageAction,
-                    locPage === totalLocPages && { color: '#C7C7CC' },
-                  ]}
+                <Picker
+                  selectedValue={selectedEvent}
+                  style={sharedStyles.invisiblePicker}
+                  onValueChange={(val) => {
+                    setSelectedEvent(val);
+                    fetchRankings(val);
+                  }}
                 >
-                  Napred
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
-
-        <View style={{ height: 20 }} />
-
-        <View style={sharedStyles.dataBox}>
-          <View style={sharedStyles.headerRow}>
-            <Text style={localStyles.sectionTitle}>👑 Top Šmiberi</Text>
-
-            <View style={sharedStyles.modernPickerWrapper}>
-              <View style={sharedStyles.visualPickerContainer}>
-                <Text style={sharedStyles.pickerText} numberOfLines={1}>
-                  {selectedEvent}
-                </Text>
-                <Text style={sharedStyles.chevronIcon}>{'\uf0d7'}</Text>
+                  {eventList.map((evt, idx) => (
+                    <Picker.Item key={idx} label={evt} value={evt} />
+                  ))}
+                </Picker>
               </View>
-              <Picker
-                selectedValue={selectedEvent}
-                style={sharedStyles.invisiblePicker}
-                onValueChange={(val) => {
-                  setSelectedEvent(val);
-                  fetchRankings(val);
-                }}
-              >
-                {eventList.map((evt, idx) => (
-                  <Picker.Item key={idx} label={evt} value={evt} />
-                ))}
-              </Picker>
             </View>
-          </View>
 
-          {loading ? (
-            <View style={localStyles.loaderContainer}>
-              <ActivityIndicator size="small" color="#2196F3" />
-              <Text style={localStyles.loaderText}>Osvežavanje šmibera...</Text>
-            </View>
-          ) : (
-            <>
-              {paginatedUsers.length === 0 ? (
-                <Text style={sharedStyles.emptyText}>Nema podataka...</Text>
-              ) : (
-                paginatedUsers.map((item, i) => {
-                  const globalIdx = (userPage - 1) * rowsPerPage + i;
-                  return (
-                    <View key={globalIdx} style={sharedStyles.listItem}>
-                      <View style={{ flex: 1 }}>
-                        <Text
-                          style={[
-                            sharedStyles.itemText,
-                            {
-                              color:
-                                globalIdx === 0
-                                  ? '#D4AF37'
-                                  : globalIdx === 1
-                                    ? '#8E8E93'
-                                    : globalIdx === 2
-                                      ? '#CD7F32'
-                                      : '#1C1C1E',
-                            },
-                            globalIdx < 3 && { fontWeight: 'bold' },
-                          ]}
-                        >
-                          {globalIdx === 0
-                            ? '🥇 '
-                            : globalIdx === 1
-                              ? '🥈 '
-                              : globalIdx === 2
-                                ? '🥉 '
-                                : `${globalIdx + 1}. `}
-                          {item.name}
-                        </Text>
-                        <Text style={sharedStyles.timeSubtext}>Vreme: {item.timeStr}</Text>
+            {loadingTop ? (
+              <View style={localStyles.loaderContainer}>
+                <ActivityIndicator size="small" color="#2196F3" />
+                <Text style={localStyles.loaderText}>Osvežavanje šmibera...</Text>
+              </View>
+            ) : (
+              <>
+                {paginatedUsers.length === 0 ? (
+                  <Text style={sharedStyles.emptyText}>Nema podataka...</Text>
+                ) : (
+                  paginatedUsers.map((item, i) => {
+                    const globalIdx = (userPage - 1) * rowsPerPage + i;
+                    return (
+                      <View key={globalIdx} style={sharedStyles.listItem}>
+                        <View style={{ flex: 1 }}>
+                          <Text
+                            style={[
+                              sharedStyles.itemText,
+                              {
+                                color:
+                                  globalIdx === 0
+                                    ? '#D4AF37'
+                                    : globalIdx === 1
+                                      ? '#8E8E93'
+                                      : globalIdx === 2
+                                        ? '#CD7F32'
+                                        : '#1C1C1E',
+                              },
+                              globalIdx < 3 && { fontWeight: 'bold' },
+                            ]}
+                          >
+                            {globalIdx === 0
+                              ? '🥇 '
+                              : globalIdx === 1
+                                ? '🥈 '
+                                : globalIdx === 2
+                                  ? '🥉 '
+                                  : `${globalIdx + 1}. `}
+                            {item.name}
+                          </Text>
+                          <Text style={sharedStyles.timeSubtext}>{item.timeStr}</Text>
+                        </View>
+                        <Text style={sharedStyles.countText}>{item.total}x</Text>
                       </View>
-                      <Text style={sharedStyles.countText}>{item.total}x</Text>
-                    </View>
-                  );
-                })
-              )}
+                    );
+                  })
+                )}
 
-              {data.userRanking.length > rowsPerPage && (
-                <View style={sharedStyles.paginationRow}>
-                  <TouchableOpacity
-                    disabled={userPage === 1}
-                    onPress={() => setUserPage((p) => p - 1)}
-                  >
-                    <Text style={[localStyles.pageAction, userPage === 1 && { color: '#C7C7CC' }]}>
-                      Nazad
-                    </Text>
-                  </TouchableOpacity>
-
-                  <View style={localStyles.pageDisplay}>
-                    <Text style={sharedStyles.pageInfo}>
-                      {userPage} / {totalUserPages}
-                    </Text>
-                  </View>
-
-                  <TouchableOpacity
-                    disabled={userPage === totalUserPages}
-                    onPress={() => setUserPage((p) => p + 1)}
-                  >
-                    <Text
-                      style={[
-                        localStyles.pageAction,
-                        userPage === totalUserPages && { color: '#C7C7CC' },
-                      ]}
+                {data.userRanking.length > rowsPerPage && (
+                  <View style={sharedStyles.paginationRow}>
+                    <TouchableOpacity
+                      disabled={userPage === 1}
+                      onPress={() => setUserPage((p) => p - 1)}
                     >
-                      Napred
-                    </Text>
-                  </TouchableOpacity>
+                      <Text
+                        style={[localStyles.pageAction, userPage === 1 && { color: '#C7C7CC' }]}
+                      >
+                        Nazad
+                      </Text>
+                    </TouchableOpacity>
+
+                    <View style={localStyles.pageDisplay}>
+                      <Text style={sharedStyles.pageInfo}>
+                        {userPage} / {totalUserPages}
+                      </Text>
+                    </View>
+
+                    <TouchableOpacity
+                      disabled={userPage === totalUserPages}
+                      onPress={() => setUserPage((p) => p + 1)}
+                    >
+                      <Text
+                        style={[
+                          localStyles.pageAction,
+                          userPage === totalUserPages && { color: '#C7C7CC' },
+                        ]}
+                      >
+                        Napred
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </>
+            )}
+          </View>
+        )}
+
+        {/* TAB 2: TOP UGOSTITELJ */}
+        {activeTab === 'ugostitelj' && (
+          <View style={sharedStyles.dataBox}>
+            <View style={sharedStyles.headerRow}>
+              <Text style={localStyles.sectionTitle}>📍 Top Ugostitelj</Text>
+            </View>
+            {paginatedLocations.length === 0 ? (
+              <Text style={sharedStyles.emptyText}>...</Text>
+            ) : (
+              paginatedLocations.map((item, i) => {
+                const locGlobalIdx = (locPage - 1) * rowsPerPageLoc + i;
+                return (
+                  <View key={locGlobalIdx} style={sharedStyles.listItem}>
+                    <View style={{ flex: 1 }}>
+                      <Text
+                        style={[sharedStyles.itemText, locGlobalIdx < 3 && { fontWeight: 'bold' }]}
+                      >
+                        {locGlobalIdx === 0 ? '🏆 ' : `${locGlobalIdx + 1}. `}
+                        {item.name}
+                      </Text>
+                      <Text style={sharedStyles.timeSubtext}>Vreme: {item.timeStr}</Text>
+                    </View>
+                    <View style={localStyles.dayBadge}>
+                      <Text style={localStyles.dayBadgeText}>{item.total}x</Text>
+                    </View>
+                  </View>
+                );
+              })
+            )}
+
+            {data.locationRanking.length > rowsPerPageLoc && (
+              <View style={sharedStyles.paginationRow}>
+                <TouchableOpacity disabled={locPage === 1} onPress={() => setLocPage((p) => p - 1)}>
+                  <Text style={[localStyles.pageAction, locPage === 1 && { color: '#C7C7CC' }]}>
+                    Nazad
+                  </Text>
+                </TouchableOpacity>
+
+                <View style={localStyles.pageDisplay}>
+                  <Text style={sharedStyles.pageInfo}>
+                    {locPage} / {totalLocPages}
+                  </Text>
                 </View>
-              )}
-            </>
-          )}
-        </View>
+
+                <TouchableOpacity
+                  disabled={locPage === totalLocPages}
+                  onPress={() => setLocPage((p) => p + 1)}
+                >
+                  <Text
+                    style={[
+                      localStyles.pageAction,
+                      locPage === totalLocPages && { color: '#C7C7CC' },
+                    ]}
+                  >
+                    Napred
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* TAB 3: TOTAL OSVEŽENJE - NEW CIRCULAR DESIGN */}
+        {activeTab === 'total' && (
+          <View style={styles.totalOsvezenjeContainer}>
+            {combinedRanking.length === 0 ? (
+              <View style={localStyles.loaderContainer}>
+                <ActivityIndicator size="large" color="#4DB6AC" />
+                <Text style={styles.loaderTextGreen}>Učitavanje...</Text>
+              </View>
+            ) : (
+              <>
+                <Text style={styles.totalTitle}>🍹 Legende Osveženja</Text>
+                {renderTopThree(combinedRanking)}
+                {renderRemainingRanks(combinedRanking)}
+              </>
+            )}
+          </View>
+        )}
       </ScrollView>
     </View>
   );
 }
 
 const localStyles = StyleSheet.create({
-  domacinCard: {
-    backgroundColor: '#E8F5E9',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 20,
-    borderLeftWidth: 5,
-    borderLeftColor: '#4CAF50',
-  },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
-  cardIcon: { fontSize: 20, marginRight: 8 },
-  cardTitle: { fontSize: 14, fontWeight: '900', color: '#2E7D32' },
-  cardDescription: { fontSize: 12, color: '#3A3A3C', lineHeight: 18 },
   sectionTitle: { fontSize: 16, fontWeight: '800', color: '#1C1C1E' },
   loaderContainer: {
     paddingVertical: 30,
@@ -329,5 +545,212 @@ const localStyles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 12,
+  },
+});
+
+const styles = StyleSheet.create({
+  tabContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5EA',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  tab: {
+    flex: 1,
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderBottomWidth: 3,
+    borderBottomColor: 'transparent',
+  },
+  activeTab: {
+    borderBottomColor: '#4DB6AC',
+  },
+  tabText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#8E8E93',
+  },
+  activeTabText: {
+    color: '#4DB6AC',
+    fontWeight: '700',
+  },
+  totalOsvezenjeContainer: {
+    padding: 15,
+  },
+  totalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#1C1C1E',
+    textAlign: 'center',
+    marginBottom: 20,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  podiumContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    padding: 5,
+    marginBottom: 15,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+  },
+  topThreeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'flex-end',
+  },
+  podiumItem: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  podiumFirst: {
+    marginBottom: 15,
+  },
+  avatarContainer: {
+    borderRadius: 100,
+    marginBottom: 8,
+    position: 'relative',
+  },
+  avatarCircle: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 100,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#fff',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+  },
+  initialsText: {
+    color: '#fff',
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+  rankBadge: {
+    position: 'absolute',
+    bottom: -5,
+    right: -5,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#fff',
+    elevation: 2,
+  },
+  rankNumber: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#fff',
+  },
+  podiumName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1C1C1E',
+    marginBottom: 2,
+  },
+  podiumPoints: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#4DB6AC',
+  },
+  podiumTime: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: '#8E8E93',
+  },
+  remainingContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 15,
+    padding: 12,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  remainingRow: {
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F2F2F7',
+  },
+  remainingLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  smallAvatarContainer: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginRight: 10,
+  },
+  smallAvatarCircle: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 2,
+  },
+  smallInitialsText: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#fff',
+    letterSpacing: 0.5,
+  },
+  remainingInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  remainingRank: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#FF6B6B',
+    marginRight: 10,
+    width: 30,
+  },
+  remainingName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1C1C1E',
+  },
+  remainingStats: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#8E8E93',
+    marginTop: 1,
+  },
+  loaderTextGreen: {
+    marginTop: 15,
+    fontSize: 14,
+    color: '#4DB6AC',
+    fontWeight: '600',
+  },
+  emptyText: {
+    textAlign: 'center',
+    fontSize: 14,
+    color: '#8E8E93',
+    fontStyle: 'italic',
+    paddingVertical: 30,
   },
 });

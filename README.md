@@ -52,8 +52,3 @@ npm run deploy
 - Run `npm run format` and `npm run typecheck` locally.
 - Remove any local secrets or tokens from files (check `git status` and local config files).
 - Commit changes and push to your `main` branch, then run `npm run deploy` to publish web assets.
-
-If you want, I can:
-- Add a `prettier` config and run it across the repo.
-- Add `husky` + `lint-staged` to enforce formatting on commit.
-- Create a GitHub Actions workflow to build & publish Pages automatically on push to `main`.

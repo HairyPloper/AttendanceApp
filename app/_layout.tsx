@@ -21,7 +21,7 @@ SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const [loaded, error] = useFonts({
-    'MyFontAwesome': require('../assets/FontAwesome.ttf'),
+    MyFontAwesome: require('../assets/FontAwesome.ttf'),
   });
 
   // Expo Router uses Error Boundaries to catch errors in the navigation tree.

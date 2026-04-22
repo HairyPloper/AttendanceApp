@@ -108,7 +108,7 @@ export default function Leaderboard() {
 
   // Pagination for User Table
   const [userPage, setUserPage] = useState(1);
-  const rowsPerPage = 5;
+  const rowsPerPage = 7;
   const paginatedUsers = useMemo(() => {
     const start = (userPage - 1) * rowsPerPage;
     return data.userRanking.slice(start, start + rowsPerPage);
@@ -117,7 +117,7 @@ export default function Leaderboard() {
 
   // Pagination for Location Table
   const [locPage, setLocPage] = useState(1);
-  const rowsPerPageLoc = 3;
+  const rowsPerPageLoc = 7;
   const paginatedLocations = data.locationRanking.slice(
     (locPage - 1) * rowsPerPageLoc,
     locPage * rowsPerPageLoc
@@ -240,7 +240,7 @@ export default function Leaderboard() {
                   {person.name}
                 </Text>
                 <Text style={styles.podiumPoints}>{person.timeStr}</Text>
-                <Text style={styles.podiumTime}>{person.total}x poseta</Text>
+                <Text style={styles.podiumTime}>{person.total}x</Text>
               </View>
             );
           })}
@@ -264,17 +264,17 @@ export default function Leaderboard() {
           return (
             <View key={index} style={styles.remainingRow}>
               <View style={styles.remainingLeft}>
+                <Text style={styles.remainingRank}>{rank}.</Text>
                 <View style={styles.smallAvatarContainer}>
                   <View style={[styles.smallAvatarCircle, { backgroundColor: bgColor }]}>
                     <Text style={styles.smallInitialsText}>{initials}</Text>
                   </View>
                 </View>
                 <View style={styles.remainingInfo}>
-                  <Text style={styles.remainingRank}>{rank}</Text>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.remainingName}>{person.name}</Text>
                     <Text style={styles.remainingStats}>
-                      {person.timeStr} • {person.total}x poseta
+                      {person.timeStr} • {person.total}x
                     </Text>
                   </View>
                 </View>
@@ -322,9 +322,9 @@ export default function Leaderboard() {
       >
         {/* TAB 1: TOP ŠMIBERI */}
         {activeTab === 'smiberi' && (
-          <View style={sharedStyles.dataBox}>
-            <View style={sharedStyles.headerRow}>
-              <Text style={localStyles.sectionTitle}>👑 Top Šmiberi</Text>
+          <View style={styles.tabContentContainer}>
+            <View style={styles.tabHeaderRow}>
+              <Text style={localStyles.sectionTitle}>👑 Naj Šmiberi</Text>
 
               <View style={sharedStyles.modernPickerWrapper}>
                 <View style={sharedStyles.visualPickerContainer}>
@@ -350,50 +350,43 @@ export default function Leaderboard() {
 
             {loadingTop ? (
               <View style={localStyles.loaderContainer}>
-                <ActivityIndicator size="small" color="#2196F3" />
-                <Text style={localStyles.loaderText}>Osvežavanje šmibera...</Text>
+                <ActivityIndicator size="large" color="#2196f3" />
+                <Text style={styles.loaderTextBlue}>Učitavanje...</Text>
               </View>
             ) : (
               <>
                 {paginatedUsers.length === 0 ? (
-                  <Text style={sharedStyles.emptyText}>Nema podataka...</Text>
+                  <Text style={styles.emptyText}>Nema podataka...</Text>
                 ) : (
-                  paginatedUsers.map((item, i) => {
-                    const globalIdx = (userPage - 1) * rowsPerPage + i;
-                    return (
-                      <View key={globalIdx} style={sharedStyles.listItem}>
-                        <View style={{ flex: 1 }}>
-                          <Text
-                            style={[
-                              sharedStyles.itemText,
-                              {
-                                color:
-                                  globalIdx === 0
-                                    ? '#D4AF37'
-                                    : globalIdx === 1
-                                      ? '#8E8E93'
-                                      : globalIdx === 2
-                                        ? '#CD7F32'
-                                        : '#1C1C1E',
-                              },
-                              globalIdx < 3 && { fontWeight: 'bold' },
-                            ]}
-                          >
-                            {globalIdx === 0
-                              ? '🥇 '
-                              : globalIdx === 1
-                                ? '🥈 '
-                                : globalIdx === 2
-                                  ? '🥉 '
-                                  : `${globalIdx + 1}. `}
-                            {item.name}
-                          </Text>
-                          <Text style={sharedStyles.timeSubtext}>{item.timeStr}</Text>
+                  <View style={styles.remainingContainer}>
+                    {paginatedUsers.map((item, i) => {
+                      const globalIdx = (userPage - 1) * rowsPerPage + i;
+                      return (
+                        <View key={globalIdx} style={styles.remainingRow}>
+                          <View style={styles.remainingLeft}>
+                            <Text style={styles.remainingRank}>
+                              {globalIdx === 0
+                                ? '🥇'
+                                : globalIdx === 1
+                                  ? '🥈'
+                                  : globalIdx === 2
+                                    ? '🥉'
+                                    : `${globalIdx + 1}.`}
+                            </Text>
+                            <View style={styles.remainingInfo}>
+                              <View style={{ flex: 1 }}>
+                                <Text style={styles.remainingName}>{item.name}</Text>
+                                <Text style={styles.remainingStats}>{item.timeStr}</Text>
+                              </View>
+                            </View>
+                            <View style={localStyles.dayBadge}>
+                              <Text style={localStyles.dayBadgeText}>{item.total}x</Text>
+                            </View>
+                          </View>
                         </View>
-                        <Text style={sharedStyles.countText}>{item.total}x</Text>
-                      </View>
-                    );
-                  })
+                      );
+                    })}
+                  </View>
                 )}
 
                 {data.userRanking.length > rowsPerPage && (
@@ -437,62 +430,74 @@ export default function Leaderboard() {
 
         {/* TAB 2: TOP UGOSTITELJ */}
         {activeTab === 'ugostitelj' && (
-          <View style={sharedStyles.dataBox}>
-            <View style={sharedStyles.headerRow}>
-              <Text style={localStyles.sectionTitle}>📍 Top Ugostitelj</Text>
+          <View style={styles.tabContentContainer}>
+            <View style={styles.tabHeaderRow}>
+              <Text style={localStyles.sectionTitle}>📍 Ikona Gostoprimstva</Text>
             </View>
             {paginatedLocations.length === 0 ? (
-              <Text style={sharedStyles.emptyText}>...</Text>
+              <View style={localStyles.loaderContainer}>
+                <ActivityIndicator size="large" color="#2196f3" />
+                <Text style={styles.loaderTextBlue}>Učitavanje...</Text>
+              </View>
             ) : (
-              paginatedLocations.map((item, i) => {
-                const locGlobalIdx = (locPage - 1) * rowsPerPageLoc + i;
-                return (
-                  <View key={locGlobalIdx} style={sharedStyles.listItem}>
-                    <View style={{ flex: 1 }}>
-                      <Text
-                        style={[sharedStyles.itemText, locGlobalIdx < 3 && { fontWeight: 'bold' }]}
-                      >
-                        {locGlobalIdx === 0 ? '🏆 ' : `${locGlobalIdx + 1}. `}
-                        {item.name}
-                      </Text>
-                      <Text style={sharedStyles.timeSubtext}>Vreme: {item.timeStr}</Text>
-                    </View>
-                    <View style={localStyles.dayBadge}>
-                      <Text style={localStyles.dayBadgeText}>{item.total}x</Text>
-                    </View>
-                  </View>
-                );
-              })
-            )}
-
-            {data.locationRanking.length > rowsPerPageLoc && (
-              <View style={sharedStyles.paginationRow}>
-                <TouchableOpacity disabled={locPage === 1} onPress={() => setLocPage((p) => p - 1)}>
-                  <Text style={[localStyles.pageAction, locPage === 1 && { color: '#C7C7CC' }]}>
-                    Nazad
-                  </Text>
-                </TouchableOpacity>
-
-                <View style={localStyles.pageDisplay}>
-                  <Text style={sharedStyles.pageInfo}>
-                    {locPage} / {totalLocPages}
-                  </Text>
+              <>
+                <View style={styles.remainingContainer}>
+                  {paginatedLocations.map((item, i) => {
+                    const locGlobalIdx = (locPage - 1) * rowsPerPageLoc + i;
+                    return (
+                      <View key={locGlobalIdx} style={styles.remainingRow}>
+                        <View style={styles.remainingLeft}>
+                          <Text style={styles.remainingRank}>
+                            {locGlobalIdx === 0 ? '🏆' : `${locGlobalIdx + 1}.`}
+                          </Text>
+                          <View style={styles.remainingInfo}>
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.remainingName}>{item.name}</Text>
+                              <Text style={styles.remainingStats}>{item.timeStr}</Text>
+                            </View>
+                          </View>
+                          <View style={localStyles.dayBadge}>
+                            <Text style={localStyles.dayBadgeText}>{item.total}x</Text>
+                          </View>
+                        </View>
+                      </View>
+                    );
+                  })}
                 </View>
 
-                <TouchableOpacity
-                  disabled={locPage === totalLocPages}
-                  onPress={() => setLocPage((p) => p + 1)}
-                >
-                  <Text
-                    style={[
-                      localStyles.pageAction,
-                      locPage === totalLocPages && { color: '#C7C7CC' },
-                    ]}
-                  >
-                    Napred
-                  </Text>
-                </TouchableOpacity>
-              </View>
+                {data.locationRanking.length > rowsPerPageLoc && (
+                  <View style={sharedStyles.paginationRow}>
+                    <TouchableOpacity
+                      disabled={locPage === 1}
+                      onPress={() => setLocPage((p) => p - 1)}
+                    >
+                      <Text style={[localStyles.pageAction, locPage === 1 && { color: '#C7C7CC' }]}>
+                        Nazad
+                      </Text>
+                    </TouchableOpacity>
+
+                    <View style={localStyles.pageDisplay}>
+                      <Text style={sharedStyles.pageInfo}>
+                        {locPage} / {totalLocPages}
+                      </Text>
+                    </View>
+
+                    <TouchableOpacity
+                      disabled={locPage === totalLocPages}
+                      onPress={() => setLocPage((p) => p + 1)}
+                    >
+                      <Text
+                        style={[
+                          localStyles.pageAction,
+                          locPage === totalLocPages && { color: '#C7C7CC' },
+                        ]}
+                      >
+                        Napred
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </>
             )}
           </View>
         )}
@@ -503,7 +508,7 @@ export default function Leaderboard() {
             {combinedRanking.length === 0 ? (
               <View style={localStyles.loaderContainer}>
                 <ActivityIndicator size="large" color="#4DB6AC" />
-                <Text style={styles.loaderTextGreen}>Učitavanje...</Text>
+                <Text style={styles.loaderTextBlue}>Učitavanje...</Text>
               </View>
             ) : (
               <>
@@ -568,7 +573,7 @@ const styles = StyleSheet.create({
     borderBottomColor: 'transparent',
   },
   activeTab: {
-    borderBottomColor: '#4DB6AC',
+    borderBottomColor: '#2196f3',
   },
   tabText: {
     fontSize: 13,
@@ -576,8 +581,17 @@ const styles = StyleSheet.create({
     color: '#8E8E93',
   },
   activeTabText: {
-    color: '#4DB6AC',
+    color: '#2196f3',
     fontWeight: '700',
+  },
+  tabContentContainer: {
+    padding: 15,
+  },
+  tabHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
   },
   totalOsvezenjeContainer: {
     padding: 15,
@@ -726,8 +740,8 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '900',
     color: '#FF6B6B',
-    marginRight: 10,
-    width: 30,
+    marginRight: 0,
+    width: 40,
   },
   remainingName: {
     fontSize: 15,
@@ -740,10 +754,10 @@ const styles = StyleSheet.create({
     color: '#8E8E93',
     marginTop: 1,
   },
-  loaderTextGreen: {
+  loaderTextBlue: {
     marginTop: 15,
     fontSize: 14,
-    color: '#4DB6AC',
+    color: '#2196f3',
     fontWeight: '600',
   },
   emptyText: {

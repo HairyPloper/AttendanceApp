@@ -19,6 +19,8 @@ const HOST_LOCATION_MAP: { user: string; location: string }[] = [
   { user: 'Miky', location: 'MYKYSTAN' },
   { user: 'Shomi', location: 'SOMISTAN' },
   { user: 'Toške', location: 'TOSESTAN' },
+  { user: 'Anton', location: 'ANTONSTAN' },
+  { user: 'Dady', location: 'DADYSTAN' },
 ];
 
 const PROFILE_ICON_MAP: { user: string; icon: string }[] = [

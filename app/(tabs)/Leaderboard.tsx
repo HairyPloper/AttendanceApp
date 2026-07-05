@@ -1,7 +1,15 @@
 import { Picker } from '@react-native-picker/picker';
 import { useIsFocused } from '@react-navigation/native';
 import React, { useEffect, useMemo, useState } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  ActivityIndicator,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import {
   CombinedRankingItem,
   getEventList,
@@ -138,7 +146,6 @@ export default function Leaderboard() {
       if (cached) {
         setData(cached);
         if (eventFilter === 'Ukupno') setAllTimeData(cached);
-        setStatusText('Prikazujem keširane podatke dok osvežavam.');
       }
     }
 
@@ -310,6 +317,9 @@ export default function Leaderboard() {
           <View style={styles.tabContentContainer}>
             <View style={styles.tabHeaderRow}>
               <Text style={localStyles.sectionTitle}>👑 Naj Šmiberi</Text>
+              {loadingTop && data.userRanking.length > 0 && (
+                <ActivityIndicator size="small" color="#2196F3" />
+              )}
               <View style={sharedStyles.modernPickerWrapper}>
                 <View style={sharedStyles.visualPickerContainer}>
                   <Text style={sharedStyles.pickerText} numberOfLines={1}>
@@ -357,6 +367,9 @@ export default function Leaderboard() {
           <View style={styles.tabContentContainer}>
             <View style={styles.tabHeaderRow}>
               <Text style={localStyles.sectionTitle}>📍 Ikona Gostoprimstva</Text>
+              {loadingTop && data.locationRanking.length > 0 && (
+                <ActivityIndicator size="small" color="#2196F3" />
+              )}
             </View>
             {loadingTop && paginatedLocations.length === 0 ? (
               <LoadingState />
@@ -388,7 +401,12 @@ export default function Leaderboard() {
               <LoadingState />
             ) : (
               <>
-                <Text style={styles.totalTitle}>🍹 Legende Osveženja</Text>
+                <View style={styles.totalTitleRow}>
+                  <Text style={styles.totalTitle}>🍹 Legende Osveženja</Text>
+                  {loadingTop && combinedRanking.length > 0 && (
+                    <ActivityIndicator size="small" color="#4DB6AC" />
+                  )}
+                </View>
                 {renderTopThree(combinedRanking)}
                 {renderRemainingRanks(combinedRanking)}
               </>
@@ -452,12 +470,18 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   totalOsvezenjeContainer: { padding: 15 },
+  totalTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 20,
+  },
   totalTitle: {
     fontSize: 18,
     fontWeight: '800',
     color: '#1C1C1E',
     textAlign: 'center',
-    marginBottom: 20,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },

@@ -11,7 +11,6 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  TouchableOpacity,
   View,
 } from 'react-native';
 import { submitScan } from '../../components/api';
@@ -35,7 +34,6 @@ export default function ScanScreen() {
   const [name, setName] = useState<string>('');
   const [isRegistered, setIsRegistered] = useState<boolean>(false);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
-  const [torchOn, setTorchOn] = useState(false);
   const [toast, setToast] = useState<{
     message: string;
     type: ToastType;
@@ -174,7 +172,6 @@ export default function ScanScreen() {
             style={styles.camera}
             facing="back"
             autofocus="on"
-            enableTorch={torchOn}
             barcodeScannerSettings={{
               barcodeTypes: ['qr'],
             }}
@@ -196,16 +193,6 @@ export default function ScanScreen() {
           </View>
         )}
       </View>
-
-      <TouchableOpacity
-        accessibilityRole="button"
-        style={[styles.torchButton, torchOn && styles.torchButtonActive]}
-        onPress={() => setTorchOn((current) => !current)}
-      >
-        <Text style={[styles.torchButtonText, torchOn && styles.torchButtonTextActive]}>
-          {torchOn ? 'Lampa uključena' : 'Uključi lampu'}
-        </Text>
-      </TouchableOpacity>
 
       <Text style={styles.relaxedText}>
         {scanned ? 'Šaljem podatke u Šmiber bazu...' : 'Skeniraj QR'}
@@ -314,26 +301,5 @@ const styles = StyleSheet.create({
   overlayText: {
     color: '#fff',
     marginTop: 10,
-  },
-  torchButton: {
-    marginTop: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#D0E4FF',
-    backgroundColor: '#F0F7FF',
-  },
-  torchButtonActive: {
-    backgroundColor: '#2196F3',
-    borderColor: '#2196F3',
-  },
-  torchButtonText: {
-    color: '#2196F3',
-    fontWeight: '800',
-    fontSize: 13,
-  },
-  torchButtonTextActive: {
-    color: '#fff',
   },
 });

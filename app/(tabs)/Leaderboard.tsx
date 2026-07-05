@@ -1,17 +1,18 @@
 import { Picker } from '@react-native-picker/picker';
 import { useIsFocused } from '@react-navigation/native';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import {
-  ActivityIndicator,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+  CombinedRankingItem,
+  getEventList,
+  getLeaderboard,
+  RankingItem,
+  RankingsData,
+} from '../../components/api';
+import { buildCombinedRanking } from '../../components/attendanceUtils';
+import { CACHE_KEYS, getWithExpiry, saveWithExpiry } from '../../components/storageHelper';
 import { sharedStyles } from '../../components/styles';
-
-const API_URL = 'api_url_go';
+import { EmptyState, LoadingState, PaginationControls } from '../../components/ui';
 
 const HOST_LOCATION_MAP: { user: string; location: string }[] = [
   { user: 'Pako', location: 'PAKISTAN' },
@@ -40,22 +41,18 @@ const PROFILE_ICON_MAP: { user: string; icon: string }[] = [
   { user: 'Dincha', icon: '🐈' },
 ];
 
-// Generate initials-based avatar
-// Or get icon if exists in map PROFILE_ICON_MAP
+const emptyRankings: RankingsData = { userRanking: [], locationRanking: [] };
+const rowsPerPage = 7;
+
 const getInitials = (name: string): string => {
   const mapping = PROFILE_ICON_MAP.find((m) => m.user.toLowerCase() === name.toLowerCase());
-  if (mapping != null) {
-    return mapping.icon;
-  }
+  if (mapping) return mapping.icon;
 
   const words = name.trim().split(' ');
-  if (words.length >= 2) {
-    return (words[0][0] + words[1][0]).toUpperCase();
-  }
+  if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase();
   return name.substring(0, 2).toUpperCase();
 };
 
-// Generate color based on name
 const getAvatarColor = (name: string): string => {
   const colors = [
     '#FF6B6B',
@@ -76,144 +73,129 @@ const getAvatarColor = (name: string): string => {
   return colors[Math.abs(hash) % colors.length];
 };
 
-interface RankingItem {
-  name: string;
-  total: number;
-  totalMs: number;
-  timeStr: string;
-}
-
-interface RankingsData {
-  userRanking: RankingItem[];
-  locationRanking: RankingItem[];
-}
-
-function msToTimeStr(ms: number): string {
-  const totalSec = Math.floor(ms / 1000);
-  const h = Math.floor(totalSec / 3600);
-  const m = Math.floor((totalSec % 3600) / 60);
-  const s = totalSec % 60;
-  return `${h}h ${m}m ${s}s`;
-}
-
 export default function Leaderboard() {
   const isFocused = useIsFocused();
-  const [data, setData] = useState<RankingsData>({ userRanking: [], locationRanking: [] });
+  const [data, setData] = useState<RankingsData>(emptyRankings);
+  const [allTimeData, setAllTimeData] = useState<RankingsData>(emptyRankings);
   const [eventList, setEventList] = useState<string[]>(['Ukupno']);
   const [selectedEvent, setSelectedEvent] = useState<string>('Ukupno');
   const [loadingTop, setLoadingTop] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [isClient, setIsClient] = useState(false);
   const [activeTab, setActiveTab] = useState<'smiberi' | 'ugostitelj' | 'total'>('smiberi');
-
-  // We keep an unfiltered snapshot of the leaderboard data to build the "Ukupno Osveženje" ranking.
-  const allTimeData = useRef<RankingsData>({ userRanking: [], locationRanking: [] });
-
-  // Pagination for User Table
   const [userPage, setUserPage] = useState(1);
-  const rowsPerPage = 7;
+  const [locPage, setLocPage] = useState(1);
+  const [statusText, setStatusText] = useState<string | null>(null);
+
   const paginatedUsers = useMemo(() => {
     const start = (userPage - 1) * rowsPerPage;
     return data.userRanking.slice(start, start + rowsPerPage);
   }, [data.userRanking, userPage]);
   const totalUserPages = Math.ceil(data.userRanking.length / rowsPerPage) || 1;
 
-  // Pagination for Location Table
-  const [locPage, setLocPage] = useState(1);
-  const rowsPerPageLoc = 7;
-  const paginatedLocations = data.locationRanking.slice(
-    (locPage - 1) * rowsPerPageLoc,
-    locPage * rowsPerPageLoc
+  const paginatedLocations = useMemo(() => {
+    const start = (locPage - 1) * rowsPerPage;
+    return data.locationRanking.slice(start, start + rowsPerPage);
+  }, [data.locationRanking, locPage]);
+  const totalLocPages = Math.ceil(data.locationRanking.length / rowsPerPage) || 1;
+
+  const combinedRanking = useMemo(
+    () => buildCombinedRanking(allTimeData, HOST_LOCATION_MAP),
+    [allTimeData]
   );
-  const totalLocPages = Math.ceil(data.locationRanking.length / rowsPerPageLoc);
-
-  const [combinedRanking, setCombinedRanking] = useState<
-    { name: string; location: string | null; total: number; totalMs: number; timeStr: string }[]
-  >([]);
-
-  const buildCombinedRanking = () => {
-    const snapshot = allTimeData.current;
-    const result = snapshot.userRanking.map((userEntry) => {
-      const mapping = HOST_LOCATION_MAP.find(
-        (m) => m.user.toLowerCase() === userEntry.name.toLowerCase()
-      );
-      const locEntry = mapping
-        ? snapshot.locationRanking.find(
-            (r) => r.name.toLowerCase() === mapping.location.toLowerCase()
-          )
-        : undefined;
-
-      const totalMs = userEntry.totalMs + (locEntry?.totalMs ?? 0);
-      const total = userEntry.total + (locEntry?.total ?? 0);
-
-      return {
-        name: userEntry.name,
-        location: mapping?.location ?? null,
-        total,
-        totalMs,
-        timeStr: locEntry ? msToTimeStr(totalMs) : userEntry.timeStr,
-      };
-    });
-    result.sort((a, b) => b.totalMs - a.totalMs);
-    setCombinedRanking(result);
-  };
 
   useEffect(() => {
     setIsClient(true);
+  }, []);
+
+  useEffect(() => {
     if (isFocused) {
       loadEventList();
-      fetchRankings(selectedEvent);
+      fetchRankings(selectedEvent, true);
     }
-  }, [isFocused]);
+  }, [isFocused, selectedEvent]);
 
   const loadEventList = async () => {
+    const cached = await getWithExpiry<string[]>(CACHE_KEYS.eventList);
+    if (cached) setEventList(cached);
+
     try {
-      const res = await fetch(`${API_URL}?action=getEventList&t=${Date.now()}`);
-      if (res.ok) {
-        const fresh = await res.json();
-        setEventList(['Ukupno', ...fresh]);
-      }
-    } catch (e) {
-      console.warn('Failed to load events');
+      const fresh = ['Ukupno', ...(await getEventList())];
+      setEventList(fresh);
+      await saveWithExpiry(CACHE_KEYS.eventList, fresh, 60);
+    } catch {
+      if (!cached) setStatusText('Lista događaja trenutno nije dostupna.');
     }
   };
 
-  const fetchRankings = async (eventFilter: string) => {
+  const fetchRankings = async (eventFilter: string, allowCache: boolean) => {
     setLoadingTop(true);
+    setStatusText(null);
+    const cacheKey = CACHE_KEYS.leaderboard(eventFilter);
+
+    if (allowCache) {
+      const cached = await getWithExpiry<RankingsData>(cacheKey);
+      if (cached) {
+        setData(cached);
+        if (eventFilter === 'Ukupno') setAllTimeData(cached);
+        setStatusText('Prikazujem keširane podatke dok osvežavam.');
+      }
+    }
+
     try {
-      const filter = eventFilter === 'Ukupno' ? '' : eventFilter;
-      const res = await fetch(
-        `${API_URL}?action=getLeaderboard&event=${encodeURIComponent(filter)}&t=${Date.now()}`
-      );
-      const json = await res.json();
-
-      if (json.error) {
-        console.error('Leaderboard Error:', json.error);
-        setData({ userRanking: [], locationRanking: [] });
-        return;
-      }
-
-      setData(json);
+      const fresh = await getLeaderboard(eventFilter);
+      setData(fresh);
       setUserPage(1);
+      setLocPage(1);
+      await saveWithExpiry(cacheKey, fresh, 5);
 
-      if (!filter && allTimeData.current.userRanking.length === 0) {
-        allTimeData.current = json;
-        buildCombinedRanking();
+      if (eventFilter === 'Ukupno') {
+        setAllTimeData(fresh);
+      } else if (allTimeData.userRanking.length === 0) {
+        const totalFresh = await getLeaderboard('Ukupno');
+        setAllTimeData(totalFresh);
+        await saveWithExpiry(CACHE_KEYS.leaderboard('Ukupno'), totalFresh, 5);
       }
-    } catch (e) {
-      console.warn('Ranking fetch failed');
+
+      setStatusText(null);
+    } catch {
+      setStatusText('Ne mogu da osvežim rang listu. Pokušaj ponovo.');
     } finally {
       setLoadingTop(false);
+      setRefreshing(false);
     }
   };
 
-  if (!isClient) return null;
+  const handleRefresh = () => {
+    setRefreshing(true);
+    loadEventList();
+    fetchRankings(selectedEvent, false);
+  };
 
-  // Render circular profile design for Total Osveženje tab
-  const renderTopThree = (rankings: any[]) => {
-    if (rankings.length === 0) return <Text style={styles.emptyText}>Nema podataka...</Text>;
+  const renderRankRow = (item: RankingItem, rank: number) => (
+    <View key={`${item.name}-${rank}`} style={styles.remainingRow}>
+      <View style={styles.remainingLeft}>
+        <Text style={styles.remainingRank}>
+          {rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `${rank}.`}
+        </Text>
+        <View style={styles.remainingInfo}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.remainingName}>{item.name}</Text>
+            <Text style={styles.remainingStats}>{item.timeStr}</Text>
+          </View>
+        </View>
+        <View style={localStyles.dayBadge}>
+          <Text style={localStyles.dayBadgeText}>{item.total}x</Text>
+        </View>
+      </View>
+    </View>
+  );
+
+  const renderTopThree = (rankings: CombinedRankingItem[]) => {
+    if (rankings.length === 0) return <EmptyState label="Nema podataka..." />;
 
     const topThree = rankings.slice(0, 3);
-    const positions = [1, 0, 2]; // Order: 2nd, 1st, 3rd for visual layout
+    const positions = [1, 0, 2];
 
     return (
       <View style={styles.podiumContainer}>
@@ -229,7 +211,7 @@ export default function Leaderboard() {
             const bgColor = getAvatarColor(person.name);
 
             return (
-              <View key={index} style={[styles.podiumItem, rank === 1 && styles.podiumFirst]}>
+              <View key={person.name} style={[styles.podiumItem, rank === 1 && styles.podiumFirst]}>
                 <View style={[styles.avatarContainer, { width: size, height: size }]}>
                   <View style={[styles.avatarCircle, { backgroundColor: bgColor }]}>
                     <Text style={[styles.initialsText, { fontSize: size / 3 }]}>{initials}</Text>
@@ -251,20 +233,18 @@ export default function Leaderboard() {
     );
   };
 
-  const renderRemainingRanks = (rankings: any[]) => {
+  const renderRemainingRanks = (rankings: CombinedRankingItem[]) => {
     if (rankings.length <= 3) return null;
-
-    const remaining = rankings.slice(3, 10); // Show positions 4-9
 
     return (
       <View style={styles.remainingContainer}>
-        {remaining.map((person, index) => {
+        {rankings.slice(3, 10).map((person, index) => {
           const rank = index + 4;
           const initials = getInitials(person.name);
           const bgColor = getAvatarColor(person.name);
 
           return (
-            <View key={index} style={styles.remainingRow}>
+            <View key={person.name} style={styles.remainingRow}>
               <View style={styles.remainingLeft}>
                 <Text style={styles.remainingRank}>{rank}.</Text>
                 <View style={styles.smallAvatarContainer}>
@@ -288,9 +268,10 @@ export default function Leaderboard() {
     );
   };
 
+  if (!isClient) return null;
+
   return (
     <View style={{ flex: 1, backgroundColor: '#F2F2F7' }}>
-      {/* Tab Navigation */}
       <View style={styles.tabContainer}>
         <TouchableOpacity
           style={[styles.tab, activeTab === 'smiberi' && styles.activeTab]}
@@ -313,7 +294,7 @@ export default function Leaderboard() {
           onPress={() => setActiveTab('total')}
         >
           <Text style={[styles.tabText, activeTab === 'total' && styles.activeTabText]}>
-            🍹Osveženje
+            🍹 Osveženje
           </Text>
         </TouchableOpacity>
       </View>
@@ -321,13 +302,14 @@ export default function Leaderboard() {
       <ScrollView
         contentContainerStyle={sharedStyles.scrollContainer}
         showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
       >
-        {/* TAB 1: TOP ŠMIBERI */}
+        {statusText && <Text style={styles.statusText}>{statusText}</Text>}
+
         {activeTab === 'smiberi' && (
           <View style={styles.tabContentContainer}>
             <View style={styles.tabHeaderRow}>
               <Text style={localStyles.sectionTitle}>👑 Naj Šmiberi</Text>
-
               <View style={sharedStyles.modernPickerWrapper}>
                 <View style={sharedStyles.visualPickerContainer}>
                   <Text style={sharedStyles.pickerText} numberOfLines={1}>
@@ -338,180 +320,72 @@ export default function Leaderboard() {
                 <Picker
                   selectedValue={selectedEvent}
                   style={sharedStyles.invisiblePicker}
-                  onValueChange={(val) => {
-                    setSelectedEvent(val);
-                    fetchRankings(val);
-                  }}
+                  onValueChange={(val) => setSelectedEvent(String(val))}
                 >
-                  {eventList.map((evt, idx) => (
-                    <Picker.Item key={idx} label={evt} value={evt} />
+                  {eventList.map((evt) => (
+                    <Picker.Item key={evt} label={evt} value={evt} />
                   ))}
                 </Picker>
               </View>
             </View>
 
-            {loadingTop ? (
-              <View style={localStyles.loaderContainer}>
-                <ActivityIndicator size="large" color="#2196f3" />
-                <Text style={styles.loaderTextBlue}>Učitavanje...</Text>
-              </View>
+            {loadingTop && paginatedUsers.length === 0 ? (
+              <LoadingState />
+            ) : paginatedUsers.length === 0 ? (
+              <EmptyState label="Nema podataka..." />
             ) : (
               <>
-                {paginatedUsers.length === 0 ? (
-                  <Text style={styles.emptyText}>Nema podataka...</Text>
-                ) : (
-                  <View style={styles.remainingContainer}>
-                    {paginatedUsers.map((item, i) => {
-                      const globalIdx = (userPage - 1) * rowsPerPage + i;
-                      return (
-                        <View key={globalIdx} style={styles.remainingRow}>
-                          <View style={styles.remainingLeft}>
-                            <Text style={styles.remainingRank}>
-                              {globalIdx === 0
-                                ? '🥇'
-                                : globalIdx === 1
-                                  ? '🥈'
-                                  : globalIdx === 2
-                                    ? '🥉'
-                                    : `${globalIdx + 1}.`}
-                            </Text>
-                            <View style={styles.remainingInfo}>
-                              <View style={{ flex: 1 }}>
-                                <Text style={styles.remainingName}>{item.name}</Text>
-                                <Text style={styles.remainingStats}>{item.timeStr}</Text>
-                              </View>
-                            </View>
-                            <View style={localStyles.dayBadge}>
-                              <Text style={localStyles.dayBadgeText}>{item.total}x</Text>
-                            </View>
-                          </View>
-                        </View>
-                      );
-                    })}
-                  </View>
-                )}
-
+                <View style={styles.remainingContainer}>
+                  {paginatedUsers.map((item, i) =>
+                    renderRankRow(item, (userPage - 1) * rowsPerPage + i + 1)
+                  )}
+                </View>
                 {data.userRanking.length > rowsPerPage && (
-                  <View style={sharedStyles.paginationRow}>
-                    <TouchableOpacity
-                      disabled={userPage === 1}
-                      onPress={() => setUserPage((p) => p - 1)}
-                    >
-                      <Text
-                        style={[localStyles.pageAction, userPage === 1 && { color: '#C7C7CC' }]}
-                      >
-                        Nazad
-                      </Text>
-                    </TouchableOpacity>
-
-                    <View style={localStyles.pageDisplay}>
-                      <Text style={sharedStyles.pageInfo}>
-                        {userPage} / {totalUserPages}
-                      </Text>
-                    </View>
-
-                    <TouchableOpacity
-                      disabled={userPage === totalUserPages}
-                      onPress={() => setUserPage((p) => p + 1)}
-                    >
-                      <Text
-                        style={[
-                          localStyles.pageAction,
-                          userPage === totalUserPages && { color: '#C7C7CC' },
-                        ]}
-                      >
-                        Napred
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
+                  <PaginationControls
+                    page={userPage}
+                    totalPages={totalUserPages}
+                    onPrevious={() => setUserPage((p) => p - 1)}
+                    onNext={() => setUserPage((p) => p + 1)}
+                  />
                 )}
               </>
             )}
           </View>
         )}
 
-        {/* TAB 2: TOP UGOSTITELJ */}
         {activeTab === 'ugostitelj' && (
           <View style={styles.tabContentContainer}>
             <View style={styles.tabHeaderRow}>
               <Text style={localStyles.sectionTitle}>📍 Ikona Gostoprimstva</Text>
             </View>
-            {paginatedLocations.length === 0 ? (
-              <View style={localStyles.loaderContainer}>
-                <ActivityIndicator size="large" color="#2196f3" />
-                <Text style={styles.loaderTextBlue}>Učitavanje...</Text>
-              </View>
+            {loadingTop && paginatedLocations.length === 0 ? (
+              <LoadingState />
+            ) : paginatedLocations.length === 0 ? (
+              <EmptyState label="Nema podataka..." />
             ) : (
               <>
                 <View style={styles.remainingContainer}>
-                  {paginatedLocations.map((item, i) => {
-                    const locGlobalIdx = (locPage - 1) * rowsPerPageLoc + i;
-                    return (
-                      <View key={locGlobalIdx} style={styles.remainingRow}>
-                        <View style={styles.remainingLeft}>
-                          <Text style={styles.remainingRank}>
-                            {locGlobalIdx === 0 ? '🏆' : `${locGlobalIdx + 1}.`}
-                          </Text>
-                          <View style={styles.remainingInfo}>
-                            <View style={{ flex: 1 }}>
-                              <Text style={styles.remainingName}>{item.name}</Text>
-                              <Text style={styles.remainingStats}>{item.timeStr}</Text>
-                            </View>
-                          </View>
-                          <View style={localStyles.dayBadge}>
-                            <Text style={localStyles.dayBadgeText}>{item.total}x</Text>
-                          </View>
-                        </View>
-                      </View>
-                    );
-                  })}
+                  {paginatedLocations.map((item, i) =>
+                    renderRankRow(item, (locPage - 1) * rowsPerPage + i + 1)
+                  )}
                 </View>
-
-                {data.locationRanking.length > rowsPerPageLoc && (
-                  <View style={sharedStyles.paginationRow}>
-                    <TouchableOpacity
-                      disabled={locPage === 1}
-                      onPress={() => setLocPage((p) => p - 1)}
-                    >
-                      <Text style={[localStyles.pageAction, locPage === 1 && { color: '#C7C7CC' }]}>
-                        Nazad
-                      </Text>
-                    </TouchableOpacity>
-
-                    <View style={localStyles.pageDisplay}>
-                      <Text style={sharedStyles.pageInfo}>
-                        {locPage} / {totalLocPages}
-                      </Text>
-                    </View>
-
-                    <TouchableOpacity
-                      disabled={locPage === totalLocPages}
-                      onPress={() => setLocPage((p) => p + 1)}
-                    >
-                      <Text
-                        style={[
-                          localStyles.pageAction,
-                          locPage === totalLocPages && { color: '#C7C7CC' },
-                        ]}
-                      >
-                        Napred
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
+                {data.locationRanking.length > rowsPerPage && (
+                  <PaginationControls
+                    page={locPage}
+                    totalPages={totalLocPages}
+                    onPrevious={() => setLocPage((p) => p - 1)}
+                    onNext={() => setLocPage((p) => p + 1)}
+                  />
                 )}
               </>
             )}
           </View>
         )}
 
-        {/* TAB 3: TOTAL OSVEŽENJE - NEW CIRCULAR DESIGN */}
         {activeTab === 'total' && (
           <View style={styles.totalOsvezenjeContainer}>
-            {combinedRanking.length === 0 ? (
-              <View style={localStyles.loaderContainer}>
-                <ActivityIndicator size="large" color="#4DB6AC" />
-                <Text style={styles.loaderTextBlue}>Učitavanje...</Text>
-              </View>
+            {loadingTop && combinedRanking.length === 0 ? (
+              <LoadingState />
             ) : (
               <>
                 <Text style={styles.totalTitle}>🍹 Legende Osveženja</Text>
@@ -528,17 +402,6 @@ export default function Leaderboard() {
 
 const localStyles = StyleSheet.create({
   sectionTitle: { fontSize: 16, fontWeight: '800', color: '#1C1C1E' },
-  loaderContainer: {
-    paddingVertical: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loaderText: {
-    marginTop: 10,
-    fontSize: 12,
-    color: '#8E8E93',
-    fontWeight: '600',
-  },
   dayBadge: {
     backgroundColor: '#F2F2F7',
     paddingHorizontal: 10,
@@ -546,13 +409,6 @@ const localStyles = StyleSheet.create({
     borderRadius: 10,
   },
   dayBadgeText: { fontSize: 12, fontWeight: 'bold', color: '#8E8E93' },
-  pageAction: { fontSize: 14, fontWeight: 'bold', color: '#007AFF', padding: 5 },
-  pageDisplay: {
-    backgroundColor: '#F2F2F7',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
 });
 
 const styles = StyleSheet.create({
@@ -562,10 +418,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#E5E5EA',
     elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
   },
   tab: {
     flex: 1,
@@ -574,30 +426,32 @@ const styles = StyleSheet.create({
     borderBottomWidth: 3,
     borderBottomColor: 'transparent',
   },
-  activeTab: {
-    borderBottomColor: '#2196f3',
-  },
+  activeTab: { borderBottomColor: '#2196f3' },
   tabText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#8E8E93',
-  },
-  activeTabText: {
-    color: '#2196f3',
+    fontSize: 12,
     fontWeight: '700',
+    color: '#8E8E93',
+    textAlign: 'center',
   },
-  tabContentContainer: {
-    padding: 15,
-  },
+  activeTabText: { color: '#2196f3' },
+  tabContentContainer: { padding: 15 },
   tabHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 15,
+    gap: 10,
   },
-  totalOsvezenjeContainer: {
-    padding: 15,
+  statusText: {
+    backgroundColor: '#FFF8E1',
+    color: '#8A6D1D',
+    padding: 10,
+    borderRadius: 10,
+    marginBottom: 10,
+    fontSize: 12,
+    fontWeight: '700',
   },
+  totalOsvezenjeContainer: { padding: 15 },
   totalTitle: {
     fontSize: 18,
     fontWeight: '800',
@@ -609,32 +463,19 @@ const styles = StyleSheet.create({
   },
   podiumContainer: {
     backgroundColor: '#fff',
-    borderRadius: 20,
-    padding: 5,
+    borderRadius: 14,
+    padding: 8,
     marginBottom: 15,
     elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
   },
   topThreeRow: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'flex-end',
   },
-  podiumItem: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  podiumFirst: {
-    marginBottom: 15,
-  },
-  avatarContainer: {
-    borderRadius: 100,
-    marginBottom: 8,
-    position: 'relative',
-  },
+  podiumItem: { alignItems: 'center', flex: 1 },
+  podiumFirst: { marginBottom: 15 },
+  avatarContainer: { borderRadius: 100, marginBottom: 8, position: 'relative' },
   avatarCircle: {
     width: '100%',
     height: '100%',
@@ -644,15 +485,11 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: '#fff',
     elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
   },
   initialsText: {
     color: '#fff',
     fontWeight: '900',
-    letterSpacing: 1,
+    letterSpacing: 0.5,
   },
   rankBadge: {
     position: 'absolute',
@@ -667,52 +504,29 @@ const styles = StyleSheet.create({
     borderColor: '#fff',
     elevation: 2,
   },
-  rankNumber: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: '#fff',
-  },
+  rankNumber: { fontSize: 14, fontWeight: '900', color: '#fff' },
   podiumName: {
     fontSize: 15,
     fontWeight: '700',
     color: '#1C1C1E',
     marginBottom: 2,
+    maxWidth: 95,
   },
-  podiumPoints: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#4DB6AC',
-  },
-  podiumTime: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: '#8E8E93',
-  },
+  podiumPoints: { fontSize: 12, fontWeight: '600', color: '#4DB6AC' },
+  podiumTime: { fontSize: 11, fontWeight: '500', color: '#8E8E93' },
   remainingContainer: {
     backgroundColor: '#fff',
-    borderRadius: 15,
+    borderRadius: 14,
     padding: 12,
     elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
   },
   remainingRow: {
     paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#F2F2F7',
   },
-  remainingLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  smallAvatarContainer: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    marginRight: 10,
-  },
+  remainingLeft: { flexDirection: 'row', alignItems: 'center' },
+  smallAvatarContainer: { width: 50, height: 50, borderRadius: 25, marginRight: 10 },
   smallAvatarCircle: {
     width: '100%',
     height: '100%',
@@ -722,10 +536,6 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#fff',
     elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.15,
-    shadowRadius: 2,
   },
   smallInitialsText: {
     fontSize: 16,
@@ -733,11 +543,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     letterSpacing: 0.5,
   },
-  remainingInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
+  remainingInfo: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   remainingRank: {
     fontSize: 18,
     fontWeight: '900',
@@ -745,28 +551,11 @@ const styles = StyleSheet.create({
     marginRight: 0,
     width: 40,
   },
-  remainingName: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#1C1C1E',
-  },
+  remainingName: { fontSize: 15, fontWeight: '700', color: '#1C1C1E' },
   remainingStats: {
     fontSize: 12,
     fontWeight: '500',
     color: '#8E8E93',
     marginTop: 1,
-  },
-  loaderTextBlue: {
-    marginTop: 15,
-    fontSize: 14,
-    color: '#2196f3',
-    fontWeight: '600',
-  },
-  emptyText: {
-    textAlign: 'center',
-    fontSize: 14,
-    color: '#8E8E93',
-    fontStyle: 'italic',
-    paddingVertical: 30,
   },
 });

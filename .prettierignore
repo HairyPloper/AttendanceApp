@@ -1,0 +1,7 @@
+dist
+.expo
+node_modules
+coverage
+expo-env.d.ts
+.prettierignore
+.vscode

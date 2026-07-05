@@ -161,7 +161,7 @@ export default function HistoryScreen() {
 
       if (isMounted.current && cachedHistory) {
         setUserHistory(cachedHistory);
-        setStatusText('Prikazujem keširanu istoriju dok osvežavam.');
+        setHistoryLoading(true);
       }
 
       if (isMounted.current && cachedEvents) {

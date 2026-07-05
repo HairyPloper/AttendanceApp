@@ -2,9 +2,9 @@
 
 [![Deploy](https://github.com/HairyPloper/AttendanceApp/actions/workflows/deploy.yml/badge.svg)](https://github.com/HairyPloper/AttendanceApp/actions/workflows/deploy.yml)
 
-Small Expo + Router app. This repo includes a ready-to-run web deploy workflow that publishes to GitHub Pages.
+Small Expo Router attendance app with QR check-in, personal history, cached event data, and leaderboard views.
 
-## Quick setup
+## Quick Setup
 
 1. Install dependencies:
 
@@ -12,43 +12,44 @@ Small Expo + Router app. This repo includes a ready-to-run web deploy workflow t
 npm install
 ```
 
-2. Format and type-check before committing:
+2. Validate before committing:
 
 ```bash
-npm run format
 npm run typecheck
+npm run format:check
+npm test
 ```
 
-3. Build and test web locally (export static web):
+3. Run locally:
+
+```bash
+npm start
+```
+
+4. Build static web output:
 
 ```bash
 npm run build-web
-# serve dist locally, e.g. using 'npx serve dist' or similar
-npx serve dist
 ```
 
-4. Deploy to GitHub Pages (the repo homepage is set to `https://<user>.github.io/AttendanceApp`):
+## Scripts
+
+- `npm start` - start Expo.
+- `npm run web` - start Expo web dev mode.
+- `npm run android` / `npm run ios` - run native builds.
+- `npm run clean` - remove generated build/cache folders.
+- `npm run typecheck` - run TypeScript without emitting files.
+- `npm run format` / `npm run format:check` - write or check Prettier formatting.
+- `npm test` - run Jest.
+- `npm run build-web` - export the static web build into `dist`.
+- `npm run deploy` - manual `gh-pages` deployment path.
+
+## GitHub Pages
+
+The included workflow builds on pushes to `main`, uploads `dist`, and deploys with GitHub Pages Actions. In repository settings, use GitHub Actions as the Pages source.
+
+If local Git commands fail with a dubious ownership warning, mark this checkout as safe:
 
 ```bash
-npm run deploy
+git config --global --add safe.directory D:/Learn/event_attendance_app/AttendanceApp
 ```
-
-## Helpful scripts (added)
-
-- `npm run clean` — remove build caches and `dist` folder.
-- `npm run format` — run Prettier to format code.
-- `npm run format:check` — check formatting.
-- `npm run typecheck` — run TypeScript type-check (no emit).
-- `npm run build-web` — export static web build (`expo export -p web --clear`).
-- `npm run deploy` — build and publish `dist` to `gh-pages` (already present). The deploy script creates `dist/.nojekyll` so GitHub Pages will serve files and folders that start with an underscore (for example `_expo/`).
-
-## Notes about GitHub Pages
-
-- In your repository Settings → Pages, ensure the Source is set to the `gh-pages` branch and the folder set to `/ (root)`.
-- If you host at the repository subpath (not the user root), ensure links and asset paths resolve correctly; the deploy script creates `.nojekyll` so underscore-prefixed runtime files (like `_expo/`) are served by Pages.
-
-## Clean-up checklist before push
-
-- Run `npm run format` and `npm run typecheck` locally.
-- Remove any local secrets or tokens from files (check `git status` and local config files).
-- Commit changes and push to your `main` branch, then run `npm run deploy` to publish web assets.

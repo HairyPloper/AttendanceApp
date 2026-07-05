@@ -3,9 +3,10 @@ import { useIsFocused } from '@react-navigation/native';
 import { BarcodeScanningResult, CameraView, useCameraPermissions } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  DeviceEventEmitter,
   Keyboard,
   StyleSheet,
   Text,
@@ -13,32 +14,44 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { submitScan } from '../../components/api';
+import { USER_NAME_UPDATED_EVENT } from '../../components/events';
 import { getSecurityCredentials } from '../../components/securityHelper';
+import { invalidateAttendanceCaches } from '../../components/storageHelper';
+import { PrimaryButton, ToastMessage, ToastType } from '../../components/ui';
 
-const API_URL = 'api_url_go';
+function isValidQrPayload(value: string): boolean {
+  const trimmed = value.trim();
+  return trimmed.length > 0 && trimmed.length <= 120;
+}
 
 export default function ScanScreen() {
   const isFocused = useIsFocused();
   const [permission, requestPermission] = useCameraPermissions();
-
-  // App State
   const router = useRouter();
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const [scanned, setScanned] = useState(false);
   const [name, setName] = useState<string>('');
   const [isRegistered, setIsRegistered] = useState<boolean>(false);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [torchOn, setTorchOn] = useState(false);
   const [toast, setToast] = useState<{
     message: string;
-    type: 'success' | 'error' | 'info';
+    type: ToastType;
   } | null>(null);
 
   useEffect(() => {
     loadUser();
+    return () => {
+      if (toastTimer.current) clearTimeout(toastTimer.current);
+    };
   }, []);
 
-  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+  const showToast = (message: string, type: ToastType = 'info') => {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
     setToast({ message, type });
-    setTimeout(() => setToast(null), 4000);
+    toastTimer.current = setTimeout(() => setToast(null), 4000);
   };
 
   async function loadUser() {
@@ -48,78 +61,87 @@ export default function ScanScreen() {
         setName(savedName);
         setIsRegistered(true);
       }
-    } catch (e) {
-      console.error('Failed to load user', e);
+    } catch {
+      showToast('Ne mogu da učitam korisnika.', 'error');
     }
   }
 
   const handleRegister = async () => {
     const trimmedName = name.trim();
-    if (trimmedName.length < 2) return showToast('Unesi ime', 'error');
+    if (trimmedName.length < 2) {
+      showToast('Unesi ime od najmanje 2 karaktera.', 'error');
+      return;
+    }
 
     try {
       Keyboard.dismiss();
       await AsyncStorage.setItem('user_name', trimmedName);
       setName(trimmedName);
       setIsRegistered(true);
+      DeviceEventEmitter.emit(USER_NAME_UPDATED_EVENT, trimmedName);
       showToast(`Zdravo, ${trimmedName}!`, 'success');
-    } catch (e) {
-      showToast('Greška pri čuvanju imena', 'error');
+    } catch {
+      showToast('Greška pri čuvanju imena.', 'error');
     }
   };
 
   const handleBarCodeScanned = async (result: BarcodeScanningResult) => {
+    const eventName = result.data.trim();
+
     if (scanned || isProcessing) return;
+    if (!isValidQrPayload(eventName)) {
+      showToast('QR kod nije validan.', 'error');
+      setScanned(false);
+      return;
+    }
+
     setScanned(true);
     setIsProcessing(true);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
 
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-    const { secret } = await getSecurityCredentials();
     try {
-      const response = await fetch(API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ name: name.trim(), secret: secret, event: result.data.trim() }),
-      });
-
-      const resultText = await response.text();
+      const { secret } = await getSecurityCredentials();
+      const resultText = await submitScan(name.trim(), secret, eventName);
 
       if (resultText.includes('Checkout') || resultText.includes('Success')) {
-        await AsyncStorage.removeItem(`cache_history_${name.trim()}`);
-        await AsyncStorage.removeItem(`cached_event_list`);
-        await AsyncStorage.removeItem('cached_leaderboard_Ukupno');
+        await invalidateAttendanceCaches(name.trim());
 
         const msg = resultText.includes('Checkout')
-          ? `Odjavljen: ${result.data}`
-          : `Prijavljen: ${result.data}`;
+          ? `Odjavljen: ${eventName}`
+          : `Prijavljen: ${eventName}`;
 
         showToast(msg, 'success');
-
         setTimeout(() => {
           router.replace('/UserHistory');
-        }, 2000);
+        }, 1500);
       } else {
-        showToast(resultText, 'info');
+        showToast(resultText || 'Server nije vratio status.', 'info');
       }
-    } catch (e) {
-      showToast('Greška u konekciji.', 'error');
+    } catch {
+      showToast('Greška u konekciji. Proveri internet i pokušaj ponovo.', 'error');
     } finally {
       setIsProcessing(false);
-      setTimeout(() => setScanned(false), 5000);
+      setTimeout(() => setScanned(false), 3000);
     }
   };
 
-  if (!permission?.granted) {
+  if (!permission) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color="#2196F3" />
+        <Text style={styles.permissionSubtitle}>Proveravam pristup kameri...</Text>
+      </View>
+    );
+  }
+
+  if (!permission.granted) {
     return (
       <View style={styles.centered}>
         <Text style={styles.permissionTitle}>Potreban pristup kameri</Text>
         <Text style={styles.permissionSubtitle}>
           Aplikacija koristi kameru za skeniranje QR kodova na lokacijama.
         </Text>
-        <TouchableOpacity style={styles.primaryButton} onPress={requestPermission}>
-          <Text style={styles.buttonText}>Uključi kameru</Text>
-        </TouchableOpacity>
+        <PrimaryButton label="Uključi kameru" onPress={requestPermission} />
       </View>
     );
   }
@@ -135,10 +157,11 @@ export default function ScanScreen() {
           placeholder="Tvoje ime..."
           placeholderTextColor="#999"
           autoCapitalize="words"
+          returnKeyType="done"
+          onSubmitEditing={handleRegister}
         />
-        <TouchableOpacity style={styles.primaryButton} onPress={handleRegister}>
-          <Text style={styles.buttonText}>Sačuvaj i nastavi</Text>
-        </TouchableOpacity>
+        <PrimaryButton label="Sačuvaj i nastavi" onPress={handleRegister} />
+        {toast && <ToastMessage message={toast.message} type={toast.type} />}
       </View>
     );
   }
@@ -151,7 +174,7 @@ export default function ScanScreen() {
             style={styles.camera}
             facing="back"
             autofocus="on"
-            enableTorch={true}
+            enableTorch={torchOn}
             barcodeScannerSettings={{
               barcodeTypes: ['qr'],
             }}
@@ -169,21 +192,28 @@ export default function ScanScreen() {
         {isProcessing && (
           <View style={styles.overlay}>
             <ActivityIndicator size="large" color="#fff" />
-            <Text style={{ color: '#fff', marginTop: 10 }}>Obrada...</Text>
+            <Text style={styles.overlayText}>Obrada...</Text>
           </View>
         )}
       </View>
+
+      <TouchableOpacity
+        accessibilityRole="button"
+        style={[styles.torchButton, torchOn && styles.torchButtonActive]}
+        onPress={() => setTorchOn((current) => !current)}
+      >
+        <Text style={[styles.torchButtonText, torchOn && styles.torchButtonTextActive]}>
+          {torchOn ? 'Lampa uključena' : 'Uključi lampu'}
+        </Text>
+      </TouchableOpacity>
+
       <Text style={styles.relaxedText}>
         {scanned ? 'Šaljem podatke u Šmiber bazu...' : 'Skeniraj QR'}
       </Text>
       <Text style={styles.tinySecureText}>
         <Text style={{ fontSize: 16 }}>🛡️</Text>Sigurnost garantuje Dinčo Vangard
       </Text>
-      {toast && (
-        <View style={[styles.toast, styles[toast.type]]}>
-          <Text style={styles.toastText}>{toast.message}</Text>
-        </View>
-      )}
+      {toast && <ToastMessage message={toast.message} type={toast.type} />}
     </View>
   );
 }
@@ -227,22 +257,12 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#333',
   },
-  primaryButton: {
-    backgroundColor: '#2196F3',
-    paddingHorizontal: 50,
-    paddingVertical: 16,
-    borderRadius: 30,
-  },
-  buttonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
   permissionTitle: {
     fontSize: 22,
     fontWeight: 'bold',
     marginBottom: 10,
     color: '#333',
+    textAlign: 'center',
   },
   permissionSubtitle: {
     fontSize: 14,
@@ -250,24 +270,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 30,
     paddingHorizontal: 20,
-  },
-  toast: {
-    position: 'absolute',
-    bottom: 40,
-    left: 20,
-    right: 20,
-    padding: 16,
-    borderRadius: 15,
-    elevation: 10,
-  },
-  success: { backgroundColor: '#4CAF50' },
-  error: { backgroundColor: '#F44336' },
-  info: { backgroundColor: '#2196F3' },
-  toastText: {
-    color: '#fff',
-    fontWeight: '600',
-    textAlign: 'center',
-    fontSize: 15,
   },
   relaxedText: {
     color: '#2196F3',
@@ -308,5 +310,30 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 2,
+  },
+  overlayText: {
+    color: '#fff',
+    marginTop: 10,
+  },
+  torchButton: {
+    marginTop: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#D0E4FF',
+    backgroundColor: '#F0F7FF',
+  },
+  torchButtonActive: {
+    backgroundColor: '#2196F3',
+    borderColor: '#2196F3',
+  },
+  torchButtonText: {
+    color: '#2196F3',
+    fontWeight: '800',
+    fontSize: 13,
+  },
+  torchButtonTextActive: {
+    color: '#fff',
   },
 });

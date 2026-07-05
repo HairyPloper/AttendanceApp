@@ -2,9 +2,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useMicrophonePermissions } from 'expo-camera';
 import { useFonts } from 'expo-font';
 import { Tabs } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
+  DeviceEventEmitter,
   Easing,
   Linking,
   Modal,
@@ -15,9 +16,9 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { getInvites, InviteItem, sendInvite } from '../../components/api';
+import { USER_NAME_UPDATED_EVENT } from '../../components/events';
 import { getSecurityCredentials } from '../../components/securityHelper';
-
-const API_URL = 'api_url_go';
 
 const Glyphs = {
   camera: '\uf030',
@@ -29,7 +30,7 @@ const Glyphs = {
 type IconName = keyof typeof Glyphs;
 
 function TabBarIcon({ name, color, size = 28 }: { name: IconName; color: string; size?: number }) {
-  return <Text style={[styles.iconText, { color: color, fontSize: size }]}>{Glyphs[name]}</Text>;
+  return <Text style={[styles.iconText, { color, fontSize: size }]}>{Glyphs[name]}</Text>;
 }
 
 function CountdownTimer() {
@@ -43,13 +44,10 @@ function CountdownTimer() {
 
   const moveAnim = useRef(new Animated.Value(0)).current;
 
-  // 1. Clock Logic
   useEffect(() => {
     const calculateTimeLeft = () => {
-      // September 12, 2026 at 00:00 Belgrade time (UTC+2 in summer)
       const targetDate = new Date('2026-09-12T00:00:00+02:00');
-      const now = new Date();
-      const difference = targetDate.getTime() - now.getTime();
+      const difference = targetDate.getTime() - Date.now();
 
       if (difference > 0) {
         setTimeLeft({
@@ -82,9 +80,7 @@ function CountdownTimer() {
         easing: Easing.linear,
         useNativeDriver: false,
       }).start(({ finished }) => {
-        if (finished && isActive) {
-          runConveyorBelt();
-        }
+        if (finished && isActive) runConveyorBelt();
       });
     };
 
@@ -94,7 +90,6 @@ function CountdownTimer() {
       moveAnim.setValue(0);
     }
 
-    // Cleanup
     return () => {
       isActive = false;
       moveAnim.stopAnimation();
@@ -104,7 +99,6 @@ function CountdownTimer() {
   return (
     <View style={styles.countdownContainer}>
       {!timeLeft.expired && <Text style={{ fontSize: 18 }}>👷‍♂️</Text>}
-
       {!timeLeft.expired && (
         <View style={styles.conveyorBeltClip}>
           <Animated.View style={[styles.conveyorBelt, { transform: [{ translateX: moveAnim }] }]}>
@@ -114,12 +108,10 @@ function CountdownTimer() {
           </Animated.View>
         </View>
       )}
-
       <Text style={styles.factoryWorker}>{timeLeft.expired ? '' : '🏭'}</Text>
-
       <View style={styles.countdownTextContainer}>
         {timeLeft.expired ? (
-          <Text style={styles.vacationText}>🏖️Kalimera-nema više menadžera!</Text>
+          <Text style={styles.vacationText}>🏖️ Kalimera - nema više menadžera!</Text>
         ) : (
           <>
             <Text style={styles.countdownLabel}>radi se još...</Text>
@@ -143,50 +135,40 @@ function HeaderTitle({ iconName }: { iconName: IconName }) {
 }
 
 function BroadcastBanner() {
-  const [latestInvite, setLatestInvite] = useState<any>(null);
+  const [latestInvite, setLatestInvite] = useState<InviteItem | null>(null);
   const [fadeAnim] = useState(new Animated.Value(0));
   const [isClient, setIsClient] = useState(false);
 
   const fetchInvites = async () => {
     try {
-      const res = await fetch(`${API_URL}?action=getInvites&t=${Date.now()}`, {
-        method: 'GET',
-        mode: 'cors',
-        redirect: 'follow',
-      });
-
-      if (!res.ok) throw new Error('Network response not ok');
-
-      const data = await res.json();
-      if (Array.isArray(data) && data.length > 0) {
-        const newest = data[0];
-        const msgTime = new Date(newest.timestamp).getTime();
-        const now = new Date().getTime();
-        const diffHours = Math.abs(now - msgTime) / (1000 * 60 * 60);
-
-        const isRecentInvite = diffHours < 6;
-
-        if (isRecentInvite) {
-          setLatestInvite(newest);
-          Animated.timing(fadeAnim, {
-            toValue: 1,
-            duration: 1000,
-            useNativeDriver: Platform.OS !== 'web',
-          }).start();
-        } else {
-          setLatestInvite(null);
-        }
+      const data = await getInvites();
+      const newest = data[0];
+      if (!newest) {
+        setLatestInvite(null);
+        return;
       }
-    } catch (e) {
-      console.warn('Banner fetch suppressed: Network warming up...');
+
+      const msgTime = new Date(newest.timestamp).getTime();
+      const diffHours = Math.abs(Date.now() - msgTime) / (1000 * 60 * 60);
+
+      if (diffHours < 6) {
+        setLatestInvite(newest);
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: Platform.OS !== 'web',
+        }).start();
+      } else {
+        setLatestInvite(null);
+      }
+    } catch {
+      setLatestInvite(null);
     }
   };
 
   useEffect(() => {
     setIsClient(true);
-    const initialDelay = setTimeout(() => {
-      fetchInvites();
-    }, 1000);
+    const initialDelay = setTimeout(fetchInvites, 1000);
     const interval = setInterval(fetchInvites, 30000);
     return () => {
       clearTimeout(initialDelay);
@@ -212,43 +194,40 @@ export default function TabLayout() {
   const [modalVisible, setModalVisible] = useState(false);
   const [msg, setMsg] = useState('');
   const [isSending, setIsSending] = useState(false);
-  const [micPermission, requestMicPermission] = useMicrophonePermissions();
+  const [, requestMicPermission] = useMicrophonePermissions();
 
   const [fontsLoaded] = useFonts({
     LocalFontAwesome: require('../../assets/FontAwesome.ttf'),
   });
 
+  const loadUserName = useCallback(async () => {
+    try {
+      const savedName = await AsyncStorage.getItem('user_name');
+      if (savedName) setUserName(savedName);
+    } catch {
+      setUserName('');
+    }
+  }, []);
+
   useEffect(() => {
     setIsClient(true);
-    const getName = async () => {
-      try {
-        const savedName = await AsyncStorage.getItem('user_name');
-        if (savedName && savedName !== userName) {
-          setUserName(savedName);
-        }
-      } catch (e) {
-        console.error(e);
-      }
-    };
-    getName();
-    const nameInterval = setInterval(getName, 3000);
-    return () => clearInterval(nameInterval);
-  }, [userName]);
+    loadUserName();
+    const subscription = DeviceEventEmitter.addListener(USER_NAME_UPDATED_EVENT, (nextName) => {
+      setUserName(String(nextName || ''));
+    });
+    return () => subscription.remove();
+  }, [loadUserName]);
 
   const handleSendInvite = async () => {
     if (!msg.trim() || isSending) return;
     setIsSending(true);
     try {
       const { secret } = await getSecurityCredentials();
-      const response = await fetch(
-        `${API_URL}?action=sendInvite&name=${encodeURIComponent(userName)}&secret=${secret}&msg=${encodeURIComponent(msg)}&t=${Date.now()}`
-      );
-      if (response.ok) {
-        setMsg('');
-        setModalVisible(false);
-      }
-    } catch (e) {
-      console.warn('Greška pri slanju');
+      await sendInvite(userName || 'Gost', secret, msg.trim());
+      setMsg('');
+      setModalVisible(false);
+    } catch {
+      // Keep this non-blocking; failed invites should not break navigation.
     } finally {
       setIsSending(false);
     }
@@ -257,11 +236,11 @@ export default function TabLayout() {
   const handleOpenVoiceRoom = async () => {
     const nameParam = encodeURIComponent(userName || 'Gost');
     const url = `https://hairyploper.github.io/linkice/?name=${nameParam}`;
-    requestMicPermission();
+    requestMicPermission().catch(() => undefined);
     try {
       await Linking.openURL(url);
-    } catch (err) {
-      console.error('Ne mogu da otvorim link:', err);
+    } catch {
+      // Link opening is best-effort on web/native.
     }
   };
 
@@ -269,7 +248,18 @@ export default function TabLayout() {
 
   const HeaderUserInfo = () => (
     <View style={styles.headerRightContainer}>
-      <TouchableOpacity onPress={handleOpenVoiceRoom} style={styles.inviteIconBtn}>
+      {/* <TouchableOpacity
+        accessibilityRole="button"
+        onPress={() => setModalVisible(true)}
+        style={styles.inviteIconBtn}
+      >
+        <TabBarIcon name="send" color="#2196F3" size={17} />
+      </TouchableOpacity> */}
+      <TouchableOpacity
+        accessibilityRole="button"
+        onPress={handleOpenVoiceRoom}
+        style={styles.inviteIconBtn}
+      >
         <Text style={{ fontSize: 20 }}>🔗</Text>
       </TouchableOpacity>
       <View style={{ alignItems: 'flex-end' }}>
@@ -314,7 +304,6 @@ export default function TabLayout() {
             tabBarIcon: ({ color }) => <TabBarIcon name="trophy" color={color} />,
           }}
         />
-        <Tabs.Screen name="titles" options={{ href: null }} />
       </Tabs>
 
       <Modal visible={modalVisible} transparent animationType="fade">
@@ -376,8 +365,6 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 10 },
   input: { borderWidth: 1, borderColor: '#eee', borderRadius: 8, padding: 12, marginBottom: 20 },
   modalButtons: { flexDirection: 'row', justifyContent: 'flex-end', gap: 20 },
-
-  // Countdown Timer Styles
   headerTitleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -391,6 +378,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 15,
+    maxWidth: 230,
   },
   factoryWorker: {
     fontSize: 18,
@@ -413,6 +401,7 @@ const styles = StyleSheet.create({
   },
   countdownTextContainer: {
     justifyContent: 'center',
+    minWidth: 118,
   },
   countdownLabel: {
     fontSize: 12,

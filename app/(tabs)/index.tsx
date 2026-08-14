@@ -34,6 +34,7 @@ export default function ScanScreen() {
   const [name, setName] = useState<string>('');
   const [isRegistered, setIsRegistered] = useState<boolean>(false);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [cameraError, setCameraError] = useState(false);
   const [toast, setToast] = useState<{
     message: string;
     type: ToastType;
@@ -137,9 +138,13 @@ export default function ScanScreen() {
       <View style={styles.centered}>
         <Text style={styles.permissionTitle}>Potreban pristup kameri</Text>
         <Text style={styles.permissionSubtitle}>
-          Aplikacija koristi kameru za skeniranje QR kodova na lokacijama.
+          {permission.canAskAgain
+            ? 'Aplikacija koristi kameru za skeniranje QR kodova na lokacijama.'
+            : 'Pristup kameri je blokiran.'}
         </Text>
-        <PrimaryButton label="Uključi kameru" onPress={requestPermission} />
+        {permission.canAskAgain && (
+          <PrimaryButton label="Uključi kameru" onPress={requestPermission} />
+        )}
       </View>
     );
   }
@@ -171,19 +176,31 @@ export default function ScanScreen() {
           <CameraView
             style={styles.camera}
             facing="back"
-            autofocus="on"
+            ratio="4:3"
             barcodeScannerSettings={{
               barcodeTypes: ['qr'],
             }}
             onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
-            zoom={0.1}
-          >
-            <View style={styles.scannerTargetContainer}>
-              <View style={styles.targetSquare} />
-            </View>
-          </CameraView>
+            onCameraReady={() => setCameraError(false)}
+            onMountError={() => setCameraError(true)}
+          />
         ) : (
           <View style={[styles.camera, { backgroundColor: '#000' }]} />
+        )}
+
+        {!cameraError && (
+          <View style={styles.scannerTargetContainer} pointerEvents="none">
+            <View style={styles.targetSquare} />
+          </View>
+        )}
+
+        {cameraError && (
+          <View style={styles.cameraErrorOverlay}>
+            <Text style={styles.cameraErrorText}>
+              Kamera ne može da se pokrene. Zatvori druge aplikacije koje koriste kameru ili probaj
+              drugi pregledač.
+            </Text>
+          </View>
         )}
 
         {isProcessing && (
@@ -268,8 +285,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   cameraContainer: {
-    width: 300,
-    height: 300,
+    width: '88%',
+    maxWidth: 340,
+    aspectRatio: 3 / 4,
     borderRadius: 40,
     overflow: 'hidden',
     borderWidth: 4,
@@ -278,18 +296,32 @@ const styles = StyleSheet.create({
   },
   camera: { flex: 1 },
   scannerTargetContainer: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'transparent',
   },
   targetSquare: {
-    width: 100,
-    height: 100,
+    width: '58%',
+    aspectRatio: 1,
     borderWidth: 3,
     borderColor: '#fff',
     borderRadius: 20,
     borderStyle: 'dashed',
+  },
+  cameraErrorOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.82)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 28,
+    zIndex: 3,
+  },
+  cameraErrorText: {
+    color: '#fff',
+    textAlign: 'center',
+    fontSize: 14,
+    lineHeight: 20,
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,

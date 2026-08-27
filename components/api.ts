@@ -29,6 +29,10 @@ export interface InviteItem {
   message: string;
 }
 
+export type ScanResult =
+  | { status: 'checkin' | 'checkout'; message: string }
+  | { status: 'rejected'; message: string };
+
 export const API_URL =
   'https://script.google.com/macros/s/AKfycbxe1_meZCJi0kRuL83D_kXxvCBoE1B8VauluPlJQL0fAtoBBo0q5AIFNssSDr5tsOcR/exec';
 
@@ -78,6 +82,27 @@ export function normalizeRankings(value: unknown): RankingsData {
       ? data.locationRanking.map((item) => normalizeRankingItem(item as Partial<RankingItem>))
       : [],
   };
+}
+
+export function parseScanResult(value: string): ScanResult {
+  const message = value.trim();
+
+  if (!message || message.startsWith('Error')) {
+    return {
+      status: 'rejected',
+      message: message || 'Server nije potvrdio skeniranje.',
+    };
+  }
+
+  if (message.includes('Checkout')) {
+    return { status: 'checkout', message };
+  }
+
+  if (message.includes('Success')) {
+    return { status: 'checkin', message };
+  }
+
+  return { status: 'rejected', message };
 }
 
 export async function getEventList(): Promise<string[]> {

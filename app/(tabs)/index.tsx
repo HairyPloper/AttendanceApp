@@ -8,12 +8,13 @@ import {
   ActivityIndicator,
   DeviceEventEmitter,
   Keyboard,
+  Platform,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
-import { submitScan } from '../../components/api';
+import { parseScanResult, submitScan } from '../../components/api';
 import { USER_NAME_UPDATED_EVENT } from '../../components/events';
 import { getSecurityCredentials } from '../../components/securityHelper';
 import { invalidateAttendanceCaches } from '../../components/storageHelper';
@@ -29,6 +30,9 @@ export default function ScanScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const router = useRouter();
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scanResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const navigationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scanLock = useRef(false);
 
   const [scanned, setScanned] = useState(false);
   const [name, setName] = useState<string>('');
@@ -44,6 +48,8 @@ export default function ScanScreen() {
     loadUser();
     return () => {
       if (toastTimer.current) clearTimeout(toastTimer.current);
+      if (scanResetTimer.current) clearTimeout(scanResetTimer.current);
+      if (navigationTimer.current) clearTimeout(navigationTimer.current);
     };
   }, []);
 
@@ -87,40 +93,65 @@ export default function ScanScreen() {
   const handleBarCodeScanned = async (result: BarcodeScanningResult) => {
     const eventName = result.data.trim();
 
-    if (scanned || isProcessing) return;
+    if (scanLock.current) return;
     if (!isValidQrPayload(eventName)) {
       showToast('QR kod nije validan.', 'error');
-      setScanned(false);
       return;
     }
 
+    scanLock.current = true;
     setScanned(true);
     setIsProcessing(true);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
 
     try {
-      const { secret } = await getSecurityCredentials();
-      const resultText = await submitScan(name.trim(), secret, eventName);
-
-      if (resultText.includes('Checkout') || resultText.includes('Success')) {
-        await invalidateAttendanceCaches(name.trim());
-
-        const msg = resultText.includes('Checkout')
-          ? `Odjavljen: ${eventName}`
-          : `Prijavljen: ${eventName}`;
-
-        showToast(msg, 'success');
-        setTimeout(() => {
-          router.replace('/UserHistory');
-        }, 1500);
-      } else {
-        showToast(resultText || 'Server nije vratio status.', 'info');
+      let secret: string;
+      try {
+        ({ secret } = await getSecurityCredentials());
+      } catch {
+        showToast('Ne mogu da učitam podatke za prijavu. Pokušaj ponovo.', 'error');
+        return;
       }
-    } catch {
-      showToast('Greška u konekciji. Proveri internet i pokušaj ponovo.', 'error');
+
+      let resultText: string;
+      try {
+        resultText = await submitScan(name.trim(), secret, eventName);
+      } catch {
+        showToast(
+          'Odgovor servera nije potvrđen. Proveri istoriju pre ponovnog skeniranja.',
+          'error'
+        );
+        return;
+      }
+
+      const scanResult = parseScanResult(resultText);
+      if (scanResult.status === 'rejected') {
+        showToast(scanResult.message, 'error');
+        return;
+      }
+
+      const msg =
+        scanResult.status === 'checkout' ? `Odjavljen: ${eventName}` : `Prijavljen: ${eventName}`;
+
+      showToast(msg, 'success');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
+
+      invalidateAttendanceCaches(name.trim()).catch(() => {
+        showToast('Skeniranje je sačuvano, ali lokalni podaci nisu osveženi.', 'info');
+      });
+
+      navigationTimer.current = setTimeout(() => {
+        try {
+          router.replace('/UserHistory');
+        } catch {
+          showToast('Skeniranje je sačuvano. Istoriju otvori ručno.', 'info');
+        }
+      }, 1500);
     } finally {
       setIsProcessing(false);
-      setTimeout(() => setScanned(false), 3000);
+      scanResetTimer.current = setTimeout(() => {
+        scanLock.current = false;
+        setScanned(false);
+      }, 3000);
     }
   };
 
@@ -176,7 +207,8 @@ export default function ScanScreen() {
           <CameraView
             style={styles.camera}
             facing="back"
-            ratio="4:3"
+            autofocus={Platform.OS === 'web' ? 'on' : undefined}
+            zoom={0.1}
             barcodeScannerSettings={{
               barcodeTypes: ['qr'],
             }}

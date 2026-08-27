@@ -1,4 +1,4 @@
-import { normalizeRankings } from '../api';
+import { normalizeRankings, parseScanResult } from '../api';
 import { safeJsonParse } from '../storageHelper';
 
 describe('api normalization', () => {
@@ -18,6 +18,34 @@ describe('api normalization', () => {
     expect(normalizeRankings({ error: 'nope' })).toEqual({
       userRanking: [],
       locationRanking: [],
+    });
+  });
+});
+
+describe('scan response parsing', () => {
+  it('distinguishes check-in and checkout confirmations', () => {
+    expect(parseScanResult('Check-in Success')).toEqual({
+      status: 'checkin',
+      message: 'Check-in Success',
+    });
+    expect(parseScanResult('Checkout Updated')).toEqual({
+      status: 'checkout',
+      message: 'Checkout Updated',
+    });
+  });
+
+  it('treats server errors and empty responses as rejected scans', () => {
+    expect(parseScanResult('Error: User not verified')).toEqual({
+      status: 'rejected',
+      message: 'Error: User not verified',
+    });
+    expect(parseScanResult('Error: Checkout failed')).toEqual({
+      status: 'rejected',
+      message: 'Error: Checkout failed',
+    });
+    expect(parseScanResult('   ')).toEqual({
+      status: 'rejected',
+      message: 'Server nije potvrdio skeniranje.',
     });
   });
 });

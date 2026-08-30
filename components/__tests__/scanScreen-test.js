@@ -52,7 +52,10 @@ jest.mock('../securityHelper', () => ({
 }));
 
 jest.mock('../storageHelper', () => ({
+  CACHE_KEYS: { history: (name) => `cache_history_${name}` },
+  getWithExpiry: jest.fn(() => Promise.resolve([])),
   invalidateAttendanceCaches: (...args) => mockInvalidateAttendanceCaches(...args),
+  saveWithExpiry: jest.fn(() => Promise.resolve()),
 }));
 
 jest.mock('../ui', () => ({
@@ -93,6 +96,7 @@ describe('ScanScreen', () => {
     const cameraProps = renderer.root.findByType('CameraView').props;
     expect(cameraProps).toMatchObject({ autofocus: 'on', zoom: 0.1 });
     expect(cameraProps.ratio).toBeUndefined();
+    expect(renderer.root.findByProps({ nativeID: 'ranked-scanner-frame' })).toBeTruthy();
 
     const scan = cameraProps.onBarcodeScanned;
     let firstScan;

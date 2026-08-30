@@ -31,6 +31,17 @@ const responsiveBackground = `
 body {
   background-color: #fff;
 }
+
+#ranked-scanner-frame > div,
+#ranked-scanner-frame video {
+  border-radius: 34px !important;
+  overflow: hidden !important;
+}
+
+#ranked-scanner-frame video {
+  clip-path: inset(0 round 34px);
+}
+
 @media (prefers-color-scheme: dark) {
   body {
     background-color: #000;

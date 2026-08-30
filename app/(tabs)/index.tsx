@@ -686,8 +686,8 @@ const styles = StyleSheet.create({
   },
   relaxedTextWithPlate: { marginTop: 38 },
   cameraRankShell: {
-    width: '80%',
-    maxWidth: 320,
+    width: '72%',
+    maxWidth: 288,
     aspectRatio: 3 / 4,
     borderRadius: 44,
     shadowOffset: { width: 0, height: 6 },

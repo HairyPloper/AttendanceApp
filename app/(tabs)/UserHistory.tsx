@@ -17,12 +17,12 @@ import {
   calculateTotalTime,
   formatDateTime,
   getMilestone,
-  Milestone,
   MilestoneProgress,
 } from '../../components/attendanceUtils';
 import { getSecurityCredentials } from '../../components/securityHelper';
 import { CACHE_KEYS, getWithExpiry, saveWithExpiry } from '../../components/storageHelper';
 import { sharedStyles } from '../../components/styles';
+import { getVisitMilestoneImage, VISIT_MILESTONES } from '../../components/visitRanks';
 import {
   EmptyState,
   LoadingState,
@@ -31,16 +31,7 @@ import {
   ToastType,
 } from '../../components/ui';
 
-const VISIT_MILESTONES: Milestone[] = [
-  { limit: 1, label: 'Srednjoškolac', img: 'visits_1', sub: 'Ide u srednju školu.' },
-  { limit: 5, label: 'Gaijin', img: 'visits_5', sub: 'Još uvek stranac.' },
-  { limit: 10, label: 'Street Racer', img: 'visits_10', sub: 'Dobro poznaje miris asfalta.' },
-  { limit: 25, label: 'Challenger', img: 'visits_25', sub: 'Ulice ga poznaju.' },
-  { limit: 50, label: 'Han', img: 'visits_50', sub: 'Ima svoju garažu.' },
-  { limit: 100, label: 'D.K. (Legend)', img: 'visits_100', sub: 'Gospodar planine.' },
-];
-
-const TIME_MILESTONES: Milestone[] = [
+const TIME_MILESTONES = [
   { limit: 1, label: 'Prijatelj', img: 'time_1', sub: 'Zna gde je WC.' },
   { limit: 25, label: 'Odomaćio se', img: 'time_25', sub: 'Zove te cimerom.' },
   { limit: 50, label: 'Inventar', img: 'time_50', sub: 'Zna gde se sedi.' },
@@ -54,17 +45,12 @@ const rowsPerPage = 5;
 function getMilestoneImage(imgKey: string) {
   switch (imgKey) {
     case 'visits_1':
-      return require('../../assets/images/visits_1-min.png');
     case 'visits_5':
-      return require('../../assets/images/visits_5-min.png');
     case 'visits_10':
-      return require('../../assets/images/visits_10-min.png');
     case 'visits_25':
-      return require('../../assets/images/visits_25-min.png');
     case 'visits_50':
-      return require('../../assets/images/visits_50-min.png');
     case 'visits_100':
-      return require('../../assets/images/visits_100-min.png');
+      return getVisitMilestoneImage(imgKey);
     case 'time_1':
       return require('../../assets/images/time_1-min.png');
     case 'time_25':

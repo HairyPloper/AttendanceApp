@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Picker } from '@react-native-picker/picker';
 import { useIsFocused } from '@react-navigation/native';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -70,7 +71,7 @@ function getMilestoneImage(imgKey: string) {
 
 export default function HistoryScreen() {
   const isFocused = useIsFocused();
-  const isMounted = useRef(true);
+  const loadId = useRef(0);
   const [userName, setUserName] = useState<string>('');
   const [userHistory, setUserHistory] = useState<HistoryItem[]>([]);
   const [eventList, setEventList] = useState<string[]>(['Ukupno']);
@@ -87,13 +88,12 @@ export default function HistoryScreen() {
   const [toast, setToast] = useState<{ message: string; type: ToastType } | null>(null);
 
   useEffect(() => {
-    isMounted.current = true;
     setIsClient(true);
     if (isFocused) {
       loadInitialData();
     }
     return () => {
-      isMounted.current = false;
+      loadId.current += 1;
     };
   }, [isFocused]);
 
@@ -129,65 +129,88 @@ export default function HistoryScreen() {
     setNoteModalVisible(true);
   };
 
-  const loadInitialData = async () => {
+  const loadInitialData = async (forceRefresh = false) => {
+    const requestId = ++loadId.current;
+    const isCurrent = () => requestId === loadId.current;
+
     try {
       const { name: savedName, secret } = await getSecurityCredentials();
+      if (!isCurrent()) return;
       setUserName(savedName);
 
       if (!savedName || savedName === 'Gost') {
+        setUserHistory([]);
         setHistoryLoading(false);
+        setRefreshing(false);
         setStatusText('Sačuvaj ime na ekranu za skeniranje da bi video istoriju.');
         return;
       }
 
-      const [cachedHistory, cachedEvents] = await Promise.all([
-        getWithExpiry<HistoryItem[]>(CACHE_KEYS.history(savedName)),
-        getWithExpiry<string[]>(CACHE_KEYS.eventList),
+      // Each branch renders independently: locations must never hold up history.
+      await Promise.all([
+        loadHistory(savedName, secret, forceRefresh, isCurrent),
+        loadEvents(forceRefresh, isCurrent),
       ]);
-
-      if (isMounted.current && cachedHistory) {
-        setUserHistory(cachedHistory);
-        setHistoryLoading(true);
-      }
-
-      if (isMounted.current && cachedEvents) {
-        setEventList(cachedEvents);
-      }
-
-      if (!cachedHistory) setHistoryLoading(true);
-      await fetchFreshData(savedName, secret, !!cachedHistory);
     } catch {
-      if (isMounted.current) {
+      if (isCurrent()) {
         setHistoryLoading(false);
+        setRefreshing(false);
         setStatusText('Ne mogu da učitam istoriju.');
       }
     }
   };
 
-  const fetchFreshData = async (name: string, secret: string, hasCachedHistory: boolean) => {
-    if (!isMounted.current) return;
-    if (!hasCachedHistory) setHistoryLoading(true);
-
+  const loadEvents = async (forceRefresh: boolean, isCurrent: () => boolean) => {
     try {
+      const cached = await getWithExpiry<string[]>(CACHE_KEYS.eventList).catch(() => null);
+      if (!isCurrent()) return;
+      if (cached) {
+        setEventList(cached);
+        if (!forceRefresh) return;
+      }
       const freshEvents = ['Ukupno', ...(await getEventList())];
-      if (isMounted.current) {
-        setEventList(freshEvents);
-        await saveWithExpiry(CACHE_KEYS.eventList, freshEvents, 60);
+      if (!isCurrent()) return;
+      setEventList(freshEvents);
+      await saveWithExpiry(CACHE_KEYS.eventList, freshEvents, 60).catch(() => undefined);
+    } catch {
+      // History remains usable when the optional location filter cannot refresh.
+    }
+  };
+
+  const loadHistory = async (
+    name: string,
+    secret: string,
+    forceRefresh: boolean,
+    isCurrent: () => boolean
+  ) => {
+    try {
+      const cached = await getWithExpiry<HistoryItem[]>(CACHE_KEYS.history(name)).catch(() => null);
+      if (!isCurrent()) return;
+      if (cached) {
+        setUserHistory(cached);
+        setHistoryLoading(false);
+        setStatusText(null);
+        if (!forceRefresh) return;
       }
 
+      setHistoryLoading(true);
       const data = await getUserData(name, secret);
-      if (isMounted.current) {
-        setUserHistory(data);
-        await saveWithExpiry(CACHE_KEYS.history(name), data, 10);
-        setStatusText(null);
-      }
+      if (!isCurrent()) return;
+      setUserHistory(data);
+      setCurrentPage(1);
+      setStatusText(null);
+      // Display the response before writing optional local caches.
+      setHistoryLoading(false);
+      await Promise.all([
+        saveWithExpiry(CACHE_KEYS.history(name), data, 10),
+        AsyncStorage.setItem(CACHE_KEYS.visitCount(name), JSON.stringify(data.length)),
+      ]).catch(() => undefined);
     } catch {
-      if (isMounted.current && !hasCachedHistory) {
-        setUserHistory([]);
+      if (isCurrent()) {
         setStatusText('Istorija trenutno nije dostupna. Povuci za ponovno učitavanje.');
       }
     } finally {
-      if (isMounted.current) {
+      if (isCurrent()) {
         setHistoryLoading(false);
         setRefreshing(false);
       }
@@ -196,12 +219,7 @@ export default function HistoryScreen() {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    const { name, secret } = await getSecurityCredentials();
-    if (!name || name === 'Gost') {
-      setRefreshing(false);
-      return;
-    }
-    await fetchFreshData(name, secret, userHistory.length > 0);
+    await loadInitialData(true);
   };
 
   const AchievementCard = ({

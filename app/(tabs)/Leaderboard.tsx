@@ -123,9 +123,12 @@ export default function Leaderboard() {
     }
   }, [isFocused, selectedEvent]);
 
-  const loadEventList = async () => {
+  const loadEventList = async (forceRefresh = false) => {
     const cached = await getWithExpiry<string[]>(CACHE_KEYS.eventList);
-    if (cached) setEventList(cached);
+    if (cached) {
+      setEventList(cached);
+      if (!forceRefresh) return;
+    }
 
     try {
       const fresh = ['Ukupno', ...(await getEventList())];
@@ -175,7 +178,7 @@ export default function Leaderboard() {
 
   const handleRefresh = () => {
     setRefreshing(true);
-    loadEventList();
+    loadEventList(true);
     fetchRankings(selectedEvent, false);
   };
 

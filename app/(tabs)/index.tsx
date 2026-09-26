@@ -14,14 +14,14 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { getUserData, HistoryItem, parseScanResult, submitScan } from '../../components/api';
+import { HistoryItem, parseScanResult, submitScan } from '../../components/api';
 import { USER_NAME_UPDATED_EVENT } from '../../components/events';
 import { getSecurityCredentials } from '../../components/securityHelper';
 import {
   CACHE_KEYS,
   getWithExpiry,
   invalidateAttendanceCaches,
-  saveWithExpiry,
+  safeJsonParse,
 } from '../../components/storageHelper';
 import { PrimaryButton, ToastMessage, ToastType } from '../../components/ui';
 import { getVisitRank, VisitRankTheme } from '../../components/visitRanks';
@@ -393,15 +393,21 @@ export default function ScanScreen() {
 
       if (cachedHistory) {
         setTotalVisits(cachedHistory.length);
+        await AsyncStorage.setItem(
+          CACHE_KEYS.visitCount(savedName),
+          JSON.stringify(cachedHistory.length)
+        );
         return;
       }
 
-      const { secret } = await getSecurityCredentials();
-      const freshHistory = await getUserData(savedName, secret);
+      // Decoration uses the last known count; opening the camera must not
+      // compete with a scan for an Apps Script request (and its script lock).
+      const cachedCount = safeJsonParse<number>(
+        await AsyncStorage.getItem(CACHE_KEYS.visitCount(savedName)),
+        0
+      );
       if (requestId !== rankLoadId.current) return;
-
-      setTotalVisits(freshHistory.length);
-      await saveWithExpiry(CACHE_KEYS.history(savedName), freshHistory, 10);
+      setTotalVisits(Number.isFinite(cachedCount) ? Math.max(0, cachedCount) : 0);
     } catch {
       // Rank decoration is optional; camera access must keep working offline.
     }
@@ -472,17 +478,18 @@ export default function ScanScreen() {
       showToast(msg, 'success');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => undefined);
 
-      invalidateAttendanceCaches(name.trim()).catch(() => {
+      const cacheInvalidation = invalidateAttendanceCaches(name.trim(), eventName).catch(() => {
         showToast('Skeniranje je sačuvano, ali lokalni podaci nisu osveženi.', 'info');
       });
 
-      navigationTimer.current = setTimeout(() => {
+      navigationTimer.current = setTimeout(async () => {
+        await cacheInvalidation;
         try {
           router.replace('/UserHistory');
         } catch {
           showToast('Skeniranje je sačuvano. Istoriju otvori ručno.', 'info');
         }
-      }, 1500);
+      }, 300);
     } finally {
       setIsProcessing(false);
       scanResetTimer.current = setTimeout(() => {
@@ -564,12 +571,12 @@ export default function ScanScreen() {
                 visitRank.tier >= 6
                   ? 8
                   : visitRank.tier >= 5
-                  ? 7
-                  : visitRank.tier >= 3
-                  ? 6
-                  : visitRank.tier >= 2
-                  ? 5
-                  : 4,
+                    ? 7
+                    : visitRank.tier >= 3
+                      ? 6
+                      : visitRank.tier >= 2
+                        ? 5
+                        : 4,
             },
           ]}
         >

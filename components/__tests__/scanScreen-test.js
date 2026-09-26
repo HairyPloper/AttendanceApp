@@ -8,6 +8,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const mockInvalidateAttendanceCaches = jest.fn();
 const mockReplace = jest.fn();
 const mockSubmitScan = jest.fn();
+const mockGetUserData = jest.fn();
 const originalConsoleError = console.error;
 
 jest.mock('@react-navigation/native', () => ({
@@ -45,6 +46,7 @@ jest.mock('react-native', () => ({
 jest.mock('../api', () => ({
   parseScanResult: jest.requireActual('../api').parseScanResult,
   submitScan: (...args) => mockSubmitScan(...args),
+  getUserData: (...args) => mockGetUserData(...args),
 }));
 
 jest.mock('../securityHelper', () => ({
@@ -52,7 +54,10 @@ jest.mock('../securityHelper', () => ({
 }));
 
 jest.mock('../storageHelper', () => ({
-  CACHE_KEYS: { history: (name) => `cache_history_${name}` },
+  CACHE_KEYS: {
+    history: (name) => `cache_history_${name}`,
+    visitCount: (name) => `cached_visit_count_${name}`,
+  },
   getWithExpiry: jest.fn(() => Promise.resolve([])),
   invalidateAttendanceCaches: (...args) => mockInvalidateAttendanceCaches(...args),
   saveWithExpiry: jest.fn(() => Promise.resolve()),
@@ -67,6 +72,7 @@ describe('ScanScreen', () => {
   beforeEach(() => {
     jest.useFakeTimers();
     jest.clearAllMocks();
+    mockInvalidateAttendanceCaches.mockResolvedValue();
     AsyncStorage.getItem.mockResolvedValue('Ana');
     jest.spyOn(console, 'error').mockImplementation((message, ...args) => {
       if (String(message).startsWith('react-test-renderer is deprecated')) return;
@@ -77,6 +83,46 @@ describe('ScanScreen', () => {
   afterEach(() => {
     console.error.mockRestore();
     jest.useRealTimers();
+  });
+
+  it('opens the scanner without fetching history for decoration on a cache miss', async () => {
+    const { getWithExpiry } = require('../storageHelper');
+    getWithExpiry.mockResolvedValueOnce(null);
+    AsyncStorage.getItem.mockImplementation((key) =>
+      Promise.resolve(key === 'user_name' ? 'Ana' : '25')
+    );
+    let renderer;
+    await act(async () => {
+      renderer = TestRenderer.create(<ScanScreen />);
+    });
+    expect(renderer.root.findByType('CameraView')).toBeTruthy();
+    expect(mockGetUserData).not.toHaveBeenCalled();
+    expect(AsyncStorage.getItem).toHaveBeenCalledWith('cached_visit_count_Ana');
+    await act(async () => renderer.unmount());
+  });
+
+  it('navigates promptly after success, but waits for stale history to be invalidated', async () => {
+    mockSubmitScan.mockResolvedValue('Check-in Success');
+    let invalidate;
+    mockInvalidateAttendanceCaches.mockReturnValue(
+      new Promise((resolve) => {
+        invalidate = resolve;
+      })
+    );
+    let renderer;
+    await act(async () => {
+      renderer = TestRenderer.create(<ScanScreen />);
+    });
+    await act(async () => {
+      await renderer.root.findByType('CameraView').props.onBarcodeScanned({ data: 'Event A' });
+      jest.advanceTimersByTime(300);
+    });
+    expect(mockReplace).not.toHaveBeenCalled();
+    await act(async () => {
+      invalidate();
+    });
+    expect(mockReplace).toHaveBeenCalledWith('/UserHistory');
+    await act(async () => renderer.unmount());
   });
 
   it('submits duplicate camera events once and keeps cache failure non-critical', async () => {

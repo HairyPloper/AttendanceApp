@@ -165,9 +165,10 @@ function CountdownTimer() {
   const moveAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    if (timeLeft.phase === 'finished') return;
     const timer = setInterval(() => setTimeLeft(getVacationTimerState()), 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [timeLeft.phase]);
 
   useEffect(() => {
     let isActive = true;

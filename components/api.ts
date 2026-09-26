@@ -116,7 +116,8 @@ export async function getUserData(name: string, secret: string): Promise<History
       name.trim()
     )}&secret=${encodeURIComponent(secret)}`
   );
-  return Array.isArray(data) ? (data as HistoryItem[]) : [];
+  if (!Array.isArray(data)) throw new Error('Invalid history response');
+  return data as HistoryItem[];
 }
 
 export async function getLeaderboard(eventFilter: string): Promise<RankingsData> {

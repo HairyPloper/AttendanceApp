@@ -9,6 +9,7 @@ export const CACHE_KEYS = {
   eventList: 'cached_event_list',
   leaderboard: (eventName: string) => `cached_leaderboard_${eventName || 'Ukupno'}`,
   history: (name: string) => `cache_history_${name.trim()}`,
+  visitCount: (name: string) => `cached_visit_count_${name.trim()}`,
 };
 
 export function safeJsonParse<T>(value: string | null, fallback: T): T {
@@ -63,10 +64,11 @@ export const getWithExpiry = async <T>(key: string): Promise<T | null> => {
   return item.value;
 };
 
-export const invalidateAttendanceCaches = async (name: string) => {
-  await AsyncStorage.multiRemove([
-    CACHE_KEYS.history(name),
-    CACHE_KEYS.eventList,
-    CACHE_KEYS.leaderboard('Ukupno'),
-  ]);
+export const invalidateAttendanceCaches = async (name: string, event?: string) => {
+  const keys = [CACHE_KEYS.history(name), CACHE_KEYS.leaderboard('Ukupno')];
+  if (event) keys.push(CACHE_KEYS.leaderboard(event));
+  // Existing locations do not change when a visit is recorded.
+  const events = await getWithExpiry<string[]>(CACHE_KEYS.eventList).catch(() => null);
+  if (!event || !events?.includes(event)) keys.push(CACHE_KEYS.eventList);
+  await AsyncStorage.multiRemove(keys);
 };

@@ -1,5 +1,43 @@
-import { normalizeRankings, parseScanResult } from '../api';
-import { safeJsonParse } from '../storageHelper';
+import { getUserData, normalizeRankings, parseScanResult } from '../api';
+import { CACHE_KEYS, invalidateAttendanceCaches, safeJsonParse } from '../storageHelper';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+it('rejects backend errors instead of caching them as empty history', async () => {
+  const fetchMock = jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+    ok: true,
+    json: async () => ({ error: 'Access denied' }),
+  });
+  try {
+    await expect(getUserData('Ana', 'secret')).rejects.toThrow('Invalid history response');
+  } finally {
+    fetchMock.mockRestore();
+  }
+});
+
+describe('attendance cache invalidation', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    AsyncStorage.getItem.mockResolvedValue(
+      JSON.stringify({ value: ['Ukupno', 'Event A'], expiry: Date.now() + 60000 })
+    );
+  });
+
+  it('preserves known locations while clearing history and affected rankings', async () => {
+    await invalidateAttendanceCaches('Ana', 'Event A');
+    expect(AsyncStorage.multiRemove).toHaveBeenCalledWith([
+      CACHE_KEYS.history('Ana'),
+      CACHE_KEYS.leaderboard('Ukupno'),
+      CACHE_KEYS.leaderboard('Event A'),
+    ]);
+  });
+
+  it('also refreshes locations after scanning a new location', async () => {
+    await invalidateAttendanceCaches('Ana', 'Event B');
+    expect(AsyncStorage.multiRemove).toHaveBeenCalledWith(
+      expect.arrayContaining([CACHE_KEYS.eventList])
+    );
+  });
+});
 
 describe('api normalization', () => {
   it('normalizes leaderboard payloads defensively', () => {

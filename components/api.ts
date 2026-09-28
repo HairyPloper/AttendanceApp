@@ -46,12 +46,34 @@ function withTimestamp(url: string): string {
   return `${url}${joiner}t=${Date.now()}`;
 }
 
-async function readJson<T>(url: string): Promise<T> {
-  const response = await fetch(withTimestamp(url));
-  if (!response.ok) {
-    throw new Error(`Request failed with ${response.status}`);
-  }
-  return (await response.json()) as T;
+const pendingReads = new Map<string, Promise<unknown>>();
+const READ_TIMEOUT_MS = 20000;
+
+function readJson<T>(url: string): Promise<T> {
+  const pending = pendingReads.get(url);
+  if (pending) return pending as Promise<T>;
+
+  const controller = new AbortController();
+  let timeout: ReturnType<typeof setTimeout>;
+  const deadline = new Promise<never>((_, reject) => {
+    timeout = setTimeout(() => {
+      reject(new Error('Request timed out'));
+      controller.abort();
+    }, READ_TIMEOUT_MS);
+  });
+  const request = Promise.race([
+    (async () => {
+      const response = await fetch(withTimestamp(url), { signal: controller.signal });
+      if (!response.ok) throw new Error(`Request failed with ${response.status}`);
+      return (await response.json()) as T;
+    })(),
+    deadline,
+  ]).finally(() => {
+    clearTimeout(timeout);
+    if (pendingReads.get(url) === request) pendingReads.delete(url);
+  });
+  pendingReads.set(url, request);
+  return request;
 }
 
 function toNumber(value: unknown): number {
@@ -107,7 +129,8 @@ export function parseScanResult(value: string): ScanResult {
 
 export async function getEventList(): Promise<string[]> {
   const data = await readJson<unknown>(`${API_URL}?action=getEventList`);
-  return Array.isArray(data) ? data.map(String) : [];
+  if (!Array.isArray(data)) throw new Error('Invalid event list response');
+  return data.map(String);
 }
 
 export async function getUserData(name: string, secret: string): Promise<HistoryItem[]> {
@@ -125,6 +148,17 @@ export async function getLeaderboard(eventFilter: string): Promise<RankingsData>
   const data = await readJson<unknown>(
     `${API_URL}?action=getLeaderboard&event=${encodeURIComponent(filter)}`
   );
+  if (
+    !data ||
+    typeof data !== 'object' ||
+    'error' in data ||
+    !('userRanking' in data) ||
+    !Array.isArray(data.userRanking) ||
+    !('locationRanking' in data) ||
+    !Array.isArray(data.locationRanking)
+  ) {
+    throw new Error('Invalid leaderboard response');
+  }
   return normalizeRankings(data);
 }
 
@@ -144,7 +178,10 @@ export async function submitScan(name: string, secret: string, event: string): P
     throw new Error(`Scan failed with ${response.status}`);
   }
 
-  return response.text();
+  const text = await response.text();
+  // Reads started before this write must not be reused after a confirmed scan.
+  if (parseScanResult(text).status !== 'rejected') pendingReads.clear();
+  return text;
 }
 
 export async function sendInvite(name: string, secret: string, message: string): Promise<void> {

@@ -1,6 +1,6 @@
 import { Picker } from '@react-native-picker/picker';
 import { useIsFocused } from '@react-navigation/native';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   RefreshControl,
@@ -84,7 +84,6 @@ const getAvatarColor = (name: string): string => {
 export default function Leaderboard() {
   const isFocused = useIsFocused();
   const [data, setData] = useState<RankingsData>(emptyRankings);
-  const [allTimeData, setAllTimeData] = useState<RankingsData>(emptyRankings);
   const [eventList, setEventList] = useState<string[]>(['Ukupno']);
   const [selectedEvent, setSelectedEvent] = useState<string>('Ukupno');
   const [loadingTop, setLoadingTop] = useState(false);
@@ -94,6 +93,10 @@ export default function Leaderboard() {
   const [userPage, setUserPage] = useState(1);
   const [locPage, setLocPage] = useState(1);
   const [statusText, setStatusText] = useState<string | null>(null);
+  const [eventStatusText, setEventStatusText] = useState<string | null>(null);
+  const rankingLoadId = useRef(0);
+  const eventLoadId = useRef(0);
+  const eventFilter = activeTab === 'total' ? 'Ukupno' : selectedEvent;
 
   const paginatedUsers = useMemo(() => {
     const start = (userPage - 1) * rowsPerPage;
@@ -107,79 +110,90 @@ export default function Leaderboard() {
   }, [data.locationRanking, locPage]);
   const totalLocPages = Math.ceil(data.locationRanking.length / rowsPerPage) || 1;
 
-  const combinedRanking = useMemo(
-    () => buildCombinedRanking(allTimeData, HOST_LOCATION_MAP),
-    [allTimeData]
-  );
+  const combinedRanking = useMemo(() => buildCombinedRanking(data, HOST_LOCATION_MAP), [data]);
 
   useEffect(() => {
     setIsClient(true);
   }, []);
 
   useEffect(() => {
-    if (isFocused) {
-      loadEventList();
-      fetchRankings(selectedEvent, true);
-    }
-  }, [isFocused, selectedEvent]);
+    if (isFocused) loadEventList();
+    return () => {
+      eventLoadId.current += 1;
+    };
+  }, [isFocused]);
+
+  useEffect(() => {
+    if (isFocused) fetchRankings(eventFilter);
+    return () => {
+      rankingLoadId.current += 1;
+    };
+  }, [isFocused, eventFilter]);
 
   const loadEventList = async (forceRefresh = false) => {
-    const cached = await getWithExpiry<string[]>(CACHE_KEYS.eventList);
-    if (cached) {
-      setEventList(cached);
-      if (!forceRefresh) return;
-    }
+    const requestId = ++eventLoadId.current;
+    const isCurrent = () => requestId === eventLoadId.current;
+    let cached: string[] | null = null;
 
     try {
+      cached = await getWithExpiry<string[]>(CACHE_KEYS.eventList).catch(() => null);
+      if (!isCurrent()) return;
+      setEventStatusText(null);
+      if (cached) {
+        setEventList(cached);
+        if (!forceRefresh) return;
+      }
+
       const fresh = ['Ukupno', ...(await getEventList())];
+      if (!isCurrent()) return;
       setEventList(fresh);
-      await saveWithExpiry(CACHE_KEYS.eventList, fresh, 60);
+      await saveWithExpiry(CACHE_KEYS.eventList, fresh, 60).catch(() => undefined);
     } catch {
-      if (!cached) setStatusText('Lista događaja trenutno nije dostupna.');
+      if (isCurrent() && !cached) {
+        setEventStatusText('Lista događaja trenutno nije dostupna.');
+      }
     }
   };
 
-  const fetchRankings = async (eventFilter: string, allowCache: boolean) => {
+  const fetchRankings = async (filter: string, forceRefresh = false) => {
+    const requestId = ++rankingLoadId.current;
+    const isCurrent = () => requestId === rankingLoadId.current;
+    const cacheKey = CACHE_KEYS.leaderboard(filter);
     setLoadingTop(true);
     setStatusText(null);
-    const cacheKey = CACHE_KEYS.leaderboard(eventFilter);
-
-    if (allowCache) {
-      const cached = await getWithExpiry<RankingsData>(cacheKey);
-      if (cached) {
-        setData(cached);
-        if (eventFilter === 'Ukupno') setAllTimeData(cached);
-      }
-    }
+    setUserPage(1);
+    setLocPage(1);
+    if (!forceRefresh) setData(emptyRankings);
 
     try {
-      const fresh = await getLeaderboard(eventFilter);
-      setData(fresh);
-      setUserPage(1);
-      setLocPage(1);
-      await saveWithExpiry(cacheKey, fresh, 5);
-
-      if (eventFilter === 'Ukupno') {
-        setAllTimeData(fresh);
-      } else if (allTimeData.userRanking.length === 0) {
-        const totalFresh = await getLeaderboard('Ukupno');
-        setAllTimeData(totalFresh);
-        await saveWithExpiry(CACHE_KEYS.leaderboard('Ukupno'), totalFresh, 5);
+      const cached = await getWithExpiry<RankingsData>(cacheKey).catch(() => null);
+      if (!isCurrent()) return;
+      if (cached) {
+        setData(cached);
+        if (!forceRefresh) return;
       }
 
-      setStatusText(null);
-    } catch {
-      setStatusText('Ne mogu da osvežim rang listu. Pokušaj ponovo.');
-    } finally {
+      const fresh = await getLeaderboard(filter);
+      if (!isCurrent()) return;
+      setData(fresh);
       setLoadingTop(false);
-      setRefreshing(false);
+      await saveWithExpiry(cacheKey, fresh, 5).catch(() => undefined);
+    } catch {
+      if (isCurrent()) {
+        setStatusText('Ne mogu da osvežim rang listu. Pokušaj ponovo.');
+      }
+    } finally {
+      if (isCurrent()) {
+        setLoadingTop(false);
+        setRefreshing(false);
+      }
     }
   };
 
   const handleRefresh = () => {
     setRefreshing(true);
     loadEventList(true);
-    fetchRankings(selectedEvent, false);
+    fetchRankings(eventFilter, true);
   };
 
   const renderRankRow = (item: RankingItem, rank: number) => (
@@ -314,7 +328,9 @@ export default function Leaderboard() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
       >
-        {statusText && <Text style={styles.statusText}>{statusText}</Text>}
+        {(statusText || eventStatusText) && (
+          <Text style={styles.statusText}>{statusText || eventStatusText}</Text>
+        )}
 
         {activeTab === 'smiberi' && (
           <View style={styles.tabContentContainer}>
